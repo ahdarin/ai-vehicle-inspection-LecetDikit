@@ -40,6 +40,7 @@ dependencies:
   # Untuk manipulasi gambar (resize/normalisasi)
   image: ^4.1.7
   path_provider: ^2.1.4
+  image_picker: ^1.0.7
 
 dev_dependencies:
   flutter_test:
