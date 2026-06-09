@@ -7,6 +7,9 @@ import 'package:lecetdikit/services/auth_service.dart';
 import 'firebase_options.dart';
 import 'package:lecetdikit/screens/login_screen.dart';
 
+// Variabel global untuk mengatur tema dari layar manapun
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -28,63 +31,62 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     const seedColor = Color(0xFF131B2E);
     
-    return MaterialApp(
-      title: 'LecetDikit',
-      debugShowCheckedModeBanner: false,
-      // Mengikuti pengaturan tema sistem HP (Light/Dark)
-      themeMode: ThemeMode.system, 
-      
-      // -- TEMA TERANG (LIGHT MODE) --
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: seedColor,
-          brightness: Brightness.light,
-          surface: const Color(0xFFFCF8FA),
-          primary: const Color(0xFF000000),
-          primaryContainer: const Color(0xFF131B2E),
-          onPrimaryContainer: const Color(0xFFDAE2FD),
-        ),
-        useMaterial3: true,
-        fontFamily: 'Inter', // Jika Anda mengimpor font Inter di pubspec
-      ),
+    // ValueListenableBuilder akan membangun ulang (rebuild) aplikasi saat tema diubah
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, ThemeMode currentMode, __) {
+        return MaterialApp(
+          title: 'LecetDikit',
+          debugShowCheckedModeBanner: false,
+          themeMode: currentMode, 
+          
+          // -- TEMA TERANG (LIGHT MODE) --
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: seedColor,
+              brightness: Brightness.light,
+              surface: const Color(0xFFFCF8FA),
+              primary: const Color(0xFF000000),
+              primaryContainer: const Color(0xFF131B2E),
+              onPrimaryContainer: const Color(0xFFDAE2FD),
+            ),
+            useMaterial3: true,
+            fontFamily: 'Inter',
+          ),
 
-      // -- TEMA GELAP (DARK MODE) --
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: seedColor,
-          brightness: Brightness.dark,
-          surface: const Color(0xFF121212),
-          primary: const Color(0xFFFFFFFF),
-          primaryContainer: const Color(0xFF1E293B),
-          onPrimaryContainer: const Color(0xFFDAE2FD),
-        ),
-        useMaterial3: true,
-        fontFamily: 'Inter',
-      ),
-      
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          // Selama masih loading koneksi ke Firebase Auth
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              backgroundColor: Color(0xFF0c1324), // Sesuai warna background login Anda
-              body: Center(child: CircularProgressIndicator(color: Color(0xFF38bdf8))),
-            );
-          }
+          // -- TEMA GELAP (DARK MODE) --
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: seedColor,
+              brightness: Brightness.dark,
+              surface: const Color(0xFF121212),
+              primary: const Color(0xFFFFFFFF),
+              primaryContainer: const Color(0xFF1E293B),
+              onPrimaryContainer: const Color(0xFFDAE2FD),
+            ),
+            useMaterial3: true,
+            fontFamily: 'Inter',
+          ),
           
-          // Jika ada data sesi (User sudah pernah login)
-          if (snapshot.hasData) {
-            return const DashboardScreen();
-          }
-          
-          // Jika tidak ada sesi (Belum login)
-          return const LoginScreen();
-        },
-      ), 
+          home: StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Scaffold(
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  body: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primaryContainer)),
+                );
+              }
+              if (snapshot.hasData) {
+                return const DashboardScreen();
+              }
+              return const LoginScreen();
+            },
+          ), 
+        );
+      }
     );
   }
 }

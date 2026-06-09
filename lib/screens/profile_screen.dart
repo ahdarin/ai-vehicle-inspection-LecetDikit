@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lecetdikit/services/auth_service.dart';
+import 'package:lecetdikit/main.dart'; // Import main.dart untuk akses themeNotifier
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -10,9 +11,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
-  bool _isDarkMode = false; // Status untuk toggle dark mode
 
-  // Fungsi untuk menampilkan konfirmasi sebelum logout
   void _showLogoutDialog() {
     showDialog(
       context: context,
@@ -23,17 +22,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(), // Tutup dialog
+              onPressed: () => Navigator.of(context).pop(), 
               child: const Text('Batal', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.of(context).pop(); // Tutup dialog
+                Navigator.of(context).pop(); 
                 await _authService.signOut();
-                // main.dart akan otomatis mengarahkan kembali ke LoginScreen
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFba1a1a), // Warna Error
+                backgroundColor: const Color(0xFFba1a1a), 
                 foregroundColor: Colors.white,
               ),
               child: const Text('Keluar'),
@@ -46,40 +44,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Mendapatkan data user yang sedang aktif
     final user = _authService.currentUser;
-    
-    // Menyiapkan teks default jika data kosong (misal login sebagai Tamu)
     final String displayName = user?.displayName ?? 'Pengguna Tamu';
     final String displayEmail = user?.email ?? 'Tidak ada email tertaut';
     final String initialName = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
 
-    // Warna dari desain Anda
-    const backgroundColor = Color(0xFFfcf8fa);
-    const primaryColor = Color(0xFF000000);
-    const outlineVariantColor = Color(0xFFc6c6cd);
-    const surfaceHighColor = Color(0xFFeae7e9);
+    // Mengambil skema warna dari tema saat ini (Otomatis menyesuaikan Light/Dark)
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: backgroundColor,
-      // TOP APP BAR
-      appBar: AppBar(
-        backgroundColor: backgroundColor.withOpacity(0.9),
-        elevation: 0,
-        centerTitle: true,
-        title: const Text(
-          'LecetDikit AI', // Disesuaikan dengan nama aplikasi kita
-          style: TextStyle(color: primaryColor, fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.account_circle, color: primaryColor),
-            onPressed: () {},
-          )
-        ],
-      ),
+      backgroundColor: colorScheme.surface,
       
-      // MAIN CONTENT
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: Column(
@@ -93,25 +68,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   height: 110,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: Colors.black12, width: 4),
+                    border: Border.all(color: colorScheme.primary.withOpacity(0.1), width: 4),
                   ),
                   child: CircleAvatar(
-                    backgroundColor: surfaceHighColor,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
                     backgroundImage: user?.photoURL != null ? NetworkImage(user!.photoURL!) : null,
-                    // Jika tidak ada foto (Login email/Tamu), tampilkan inisial huruf
                     child: user?.photoURL == null 
-                        ? Text(initialName, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.black54))
+                        ? Text(initialName, style: TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: colorScheme.primary))
                         : null,
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: primaryColor,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.verified, color: Colors.white, size: 16),
-                )
               ],
             ),
             const SizedBox(height: 16),
@@ -119,64 +85,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // --- NAMA & BADGE ---
             Text(
               displayName,
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: primaryColor),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: colorScheme.primary),
             ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF131b2e), // Primary Container
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.star, color: Colors.white, size: 14),
-                  SizedBox(width: 4),
-                  Text('Premium Member', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
+            
+            const SizedBox(height: 48),
 
             // --- GRUP DETAIL AKUN ---
             _buildGlassCard(
+              colorScheme: colorScheme,
               child: Column(
                 children: [
-                  _buildListTile(icon: Icons.person, title: 'Detail Akun', isHeader: true),
-                  const Divider(height: 1, color: outlineVariantColor),
-                  _buildDetailRow('Email', displayEmail),
-                  _buildDetailRow('Status', user?.isAnonymous == true ? 'Mode Tamu' : 'Terverifikasi'),
+                  _buildListTile(icon: Icons.person, title: 'Detail Akun', isHeader: true, colorScheme: colorScheme),
+                  Divider(height: 1, color: colorScheme.outlineVariant),
+                  _buildDetailRow('Email', displayEmail, colorScheme),
+                  _buildDetailRow('Status', user?.isAnonymous == true ? 'Mode Tamu' : 'Terverifikasi', colorScheme),
                 ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // --- GRUP PENGATURAN ---
+            // --- GRUP PENGATURAN (TEMA DINAMIS) ---
             _buildGlassCard(
+              colorScheme: colorScheme,
               child: Column(
                 children: [
-                  _buildListTile(icon: Icons.settings, title: 'Pengaturan', trailing: const Icon(Icons.chevron_right, color: Colors.grey)),
+                  _buildListTile(icon: Icons.settings, title: 'Pengaturan', isHeader: true, colorScheme: colorScheme),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Dark Mode', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-                            Text('Gunakan tema gelap aplikasi', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Tema Aplikasi', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: colorScheme.onSurface)),
+                              Text('Pilih tampilan antarmuka', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
+                            ],
+                          ),
                         ),
-                        Switch(
-                          value: _isDarkMode,
-                          activeColor: const Color(0xFF131b2e),
-                          onChanged: (value) {
-                            setState(() => _isDarkMode = value);
-                            // TODO: Implementasi logika tema global nanti jika dibutuhkan
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fitur Dark Mode sedang dalam pengembangan')));
+                        
+                        // Dropdown Pilihan Tema
+                        DropdownButton<ThemeMode>(
+                          value: themeNotifier.value,
+                          dropdownColor: colorScheme.surface,
+                          underline: const SizedBox(), // Menghilangkan garis bawah
+                          icon: Icon(Icons.arrow_drop_down, color: colorScheme.primary),
+                          style: TextStyle(color: colorScheme.primary, fontSize: 14, fontWeight: FontWeight.w500),
+                          onChanged: (ThemeMode? newMode) {
+                            if (newMode != null) {
+                              setState(() {
+                                themeNotifier.value = newMode; // Ubah global tema seketika
+                              });
+                            }
                           },
+                          items: const [
+                            DropdownMenuItem(value: ThemeMode.system, child: Text('Tema Sistem')),
+                            DropdownMenuItem(value: ThemeMode.light, child: Text('Light Mode')),
+                            DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark Mode')),
+                          ],
                         ),
                       ],
                     ),
@@ -188,7 +155,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
             // --- GRUP TENTANG APLIKASI ---
             _buildGlassCard(
-              child: _buildListTile(icon: Icons.info_outline, title: 'Tentang Aplikasi', trailing: const Icon(Icons.chevron_right, color: Colors.grey)),
+              colorScheme: colorScheme,
+              child: _buildListTile(icon: Icons.info_outline, title: 'Tentang Aplikasi', trailing: Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant), colorScheme: colorScheme),
             ),
             const SizedBox(height: 32),
 
@@ -201,8 +169,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 icon: const Icon(Icons.logout),
                 label: const Text('Keluar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFffdad6), // Error Container
-                  foregroundColor: const Color(0xFF93000a), // On Error Container
+                  backgroundColor: colorScheme.errorContainer,
+                  foregroundColor: colorScheme.onErrorContainer,
                   elevation: 0,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
@@ -210,21 +178,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
             
             const SizedBox(height: 32),
-            const Text('LecetDikit AI v2.4.0 • Building Trust in Automotive', style: TextStyle(color: Colors.grey, fontSize: 11)),
+            Text('AutoVision AI v2.4.0 • Building Trust in Automotive', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 11)),
           ],
         ),
       ),
     );
   }
 
-  // --- WIDGET BANTUAN UI --- //
-  
-  Widget _buildGlassCard({required Widget child}) {
+  // --- WIDGET BANTUAN UI DINAMIS --- //
+  Widget _buildGlassCard({required Widget child, required ColorScheme colorScheme}) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
+        color: colorScheme.surfaceContainerHighest.withOpacity(0.3),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFc6c6cd).withOpacity(0.5)),
+        border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.5)),
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4)),
         ],
@@ -233,24 +200,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildListTile({required IconData icon, required String title, Widget? trailing, bool isHeader = false}) {
+  Widget _buildListTile({required IconData icon, required String title, Widget? trailing, bool isHeader = false, required ColorScheme colorScheme}) {
     return ListTile(
-      leading: Icon(icon, color: Colors.black54),
-      title: Text(title, style: TextStyle(fontWeight: isHeader ? FontWeight.bold : FontWeight.w500, fontSize: 15)),
+      leading: Icon(icon, color: colorScheme.primary),
+      title: Text(title, style: TextStyle(fontWeight: isHeader ? FontWeight.bold : FontWeight.w500, fontSize: 15, color: colorScheme.onSurface)),
       trailing: trailing,
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String label, String value, ColorScheme colorScheme) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 14)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+          Text(label, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14)),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: colorScheme.onSurface)),
         ],
       ),
     );
