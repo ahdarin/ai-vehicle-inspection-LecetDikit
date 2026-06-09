@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:lecetdikit/services/ai_service.dart';
-import 'package:lecetdikit/widgets/bounding_box_painter.dart';
+import 'package:lecetdikit/screens/report_screen.dart';
 
 class InspectionScreen extends StatefulWidget {
   const InspectionScreen({super.key});
@@ -16,12 +16,9 @@ class _InspectionScreenState extends State<InspectionScreen> {
   final AiService _aiService = AiService();
   final ImagePicker _picker = ImagePicker();
 
-  File? _selectedImage;
+  List<File> _selectedImages = []; // Ubah menjadi List untuk max 5 foto
   bool _isAnalyzing = false;
-  bool _isAnalyzed = false;
-  List<DetectionResult> _results = [];
 
-  // Controller untuk form
   final _modelController = TextEditingController();
   final _platController = TextEditingController();
   final _warnaController = TextEditingController();
@@ -41,50 +38,75 @@ class _InspectionScreenState extends State<InspectionScreen> {
     super.dispose();
   }
 
-  // Tahap 1: Pilih Gambar
   Future<void> _pickImage(ImageSource source) async {
-    try {
-      final XFile? pickedFile = await _picker.pickImage(source: source);
-      if (pickedFile == null) return;
+    if (_selectedImages.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Maksimal 5 foto kendaraan!')));
+      return;
+    }
 
-      setState(() {
-        _selectedImage = File(pickedFile.path);
-        _isAnalyzed = false; // Reset hasil jika foto diganti
-        _results = [];
-      });
+    try {
+      if (source == ImageSource.gallery) {
+        // Bisa pilih multiple dari galeri
+        final List<XFile> pickedFiles = await _picker.pickMultiImage();
+        if (pickedFiles.isNotEmpty) {
+          setState(() {
+            for (var file in pickedFiles) {
+              if (_selectedImages.length < 5) _selectedImages.add(File(file.path));
+            }
+          });
+        }
+      } else {
+        final XFile? pickedFile = await _picker.pickImage(source: source);
+        if (pickedFile != null) {
+          setState(() {
+            _selectedImages.add(File(pickedFile.path));
+          });
+        }
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
-  // Tahap 2: Analisis Gambar
-  Future<void> _analyzeImage() async {
-    if (_selectedImage == null) return;
-
-    setState(() {
-      _isAnalyzing = true;
-    });
+  Future<void> _analyzeImages() async {
+    if (_selectedImages.isEmpty) return;
+    setState(() => _isAnalyzing = true);
 
     try {
-      final Uint8List bytes = await _selectedImage!.readAsBytes();
-      final results = await _aiService.detectObject(bytes);
+      List<DetectionResult> allResults = [];
+      
+      // Loop ke semua foto yang diunggah
+      for (int i = 0; i < _selectedImages.length; i++) {
+        final Uint8List bytes = await _selectedImages[i].readAsBytes();
+        final results = await _aiService.detectObject(bytes, photoIndex: i + 1); // photoIndex mulai dari 1
+        if (results.isNotEmpty) allResults.addAll(results);
+      }
 
-      setState(() {
-        _isAnalyzing = false;
-        _isAnalyzed = true;
-        if (results != null) _results = results;
-      });
+      setState(() => _isAnalyzing = false);
+
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ReportScreen(
+              images: _selectedImages,
+              results: allResults,
+              carModel: _modelController.text,
+              plateNumber: _platController.text,
+              carColor: _warnaController.text,
+            ),
+          ),
+        ).then((_) => _resetForm());
+      }
     } catch (e) {
       setState(() => _isAnalyzing = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menganalisis: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal: $e')));
     }
   }
 
   void _resetForm() {
     setState(() {
-      _selectedImage = null;
-      _isAnalyzed = false;
-      _results = [];
+      _selectedImages = [];
     });
   }
 
@@ -95,50 +117,36 @@ class _InspectionScreenState extends State<InspectionScreen> {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // Judul Halaman
         Text('Inspeksi Kendaraan', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colorScheme.primary)),
         const SizedBox(height: 8),
-        Text('Unggah foto kendaraan untuk mendeteksi kerusakan secara otomatis menggunakan AI.',
-            style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant)),
+        Text('Unggah hingga 5 foto kendaraan dari berbagai sisi.', style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant)),
         const SizedBox(height: 24),
 
-        // Form Detail Kendaraan
-        Text('Detail Kendaraan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-        const SizedBox(height: 12),
         _buildTextField('Merk & Model Mobil', 'Contoh: Toyota Camry', _modelController, colorScheme),
         _buildTextField('Nomor Plat', 'Contoh: B 1234 XYZ', _platController, colorScheme),
         _buildTextField('Warna Mobil', 'Contoh: Hitam Metalik', _warnaController, colorScheme),
         const SizedBox(height: 24),
 
-        // Area Foto / Preview
-        if (_selectedImage == null) 
-          _buildUploadArea(colorScheme)
-        else 
-          _buildImagePreview(colorScheme),
+        // Pilihan Foto
+        Text('Foto Kendaraan (${_selectedImages.length}/5)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
+        const SizedBox(height: 12),
+        _buildImageGallery(colorScheme),
 
-        const SizedBox(height: 24),
+        const SizedBox(height: 32),
 
-        // Tombol Analisis
         ElevatedButton.icon(
-          onPressed: (_selectedImage != null && !_isAnalyzing && !_isAnalyzed) ? _analyzeImage : null,
+          onPressed: (_selectedImages.isNotEmpty && !_isAnalyzing) ? _analyzeImages : null,
           icon: _isAnalyzing 
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-              : Icon(_isAnalyzed ? Icons.check_circle : Icons.analytics),
-          label: Text(_isAnalyzing ? 'Menganalisis...' : (_isAnalyzed ? 'Analisis Selesai' : 'Analisis Kerusakan')),
+              : const Icon(Icons.analytics),
+          label: Text(_isAnalyzing ? 'Menganalisis ${_selectedImages.length} Foto...' : 'Analisis Kerusakan'),
           style: ElevatedButton.styleFrom(
-            backgroundColor: _isAnalyzed ? colorScheme.surfaceTint : colorScheme.primary,
+            backgroundColor: colorScheme.primary,
             foregroundColor: colorScheme.onPrimary,
-            disabledBackgroundColor: colorScheme.primary.withOpacity(0.5),
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            minimumSize: const Size(double.infinity, 50),
           ),
         ),
-
-        const SizedBox(height: 24),
-
-        // Hasil Deteksi
-        if (_isAnalyzed) _buildResultCards(colorScheme),
       ],
     );
   }
@@ -146,158 +154,150 @@ class _InspectionScreenState extends State<InspectionScreen> {
   Widget _buildTextField(String label, String hint, TextEditingController controller, ColorScheme colorScheme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label.toUpperCase(), style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.onSurfaceVariant, letterSpacing: 1.2)),
-          const SizedBox(height: 6),
-          TextField(
-            controller: controller,
-            decoration: InputDecoration(
-              hintText: hint,
-              filled: true,
-              fillColor: colorScheme.surface,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colorScheme.primary)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUploadArea(ColorScheme colorScheme) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.5)),
-      ),
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 30,
-            backgroundColor: colorScheme.primaryContainer.withOpacity(0.1),
-            child: Icon(Icons.add_a_photo, size: 30, color: colorScheme.primary),
-          ),
-          const SizedBox(height: 16),
-          Text('Pilih Foto Kendaraan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-          const SizedBox(height: 4),
-          Text('Gunakan foto yang jelas dan terang', style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt),
-                  label: const Text('Kamera'),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _pickImage(ImageSource.gallery),
-                  icon: const Icon(Icons.image),
-                  label: const Text('Galeri'),
-                  style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                ),
-              ),
-            ],
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImagePreview(ColorScheme colorScheme) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: colorScheme.surfaceContainerHighest,
-      ),
-      child: Stack(
-        alignment: Alignment.topRight,
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Stack(
-              children: [
-                Image.file(_selectedImage!, width: double.infinity, fit: BoxFit.fitWidth),
-                if (_isAnalyzed)
-                  Positioned.fill(
-                    child: CustomPaint(painter: BoundingBoxPainter(_results, _aiService.classNames)),
-                  ),
-              ],
-            ),
-          ),
-          // Tombol X untuk membatalkan foto
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: CircleAvatar(
-              backgroundColor: Colors.black54,
-              child: IconButton(
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: _resetForm,
-              ),
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResultCards(ColorScheme colorScheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('HASIL DETEKSI AI', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: colorScheme.errorContainer, borderRadius: BorderRadius.circular(4)),
-              child: Text('${_results.length} KERUSAKAN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.onErrorContainer)),
-            )
-          ],
+      child: TextField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          filled: true,
+          fillColor: colorScheme.surface,
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5))),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: colorScheme.primary)),
         ),
-        const SizedBox(height: 12),
-        if (_results.isEmpty)
-           const Card(child: ListTile(leading: Icon(Icons.check_circle, color: Colors.green), title: Text('Tidak Terdeteksi Kerusakan', style: TextStyle(fontWeight: FontWeight.bold)))),
-        ..._results.map((res) {
-          String damageName = _aiService.classNames[res.classIndex].toUpperCase();
-          return Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: colorScheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red.withOpacity(0.3)),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2))],
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(backgroundColor: colorScheme.errorContainer, child: Icon(Icons.car_crash, color: colorScheme.error)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(damageName, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-                      const SizedBox(height: 4),
-                      Text('Confidence: ${(res.confidence * 100).toStringAsFixed(1)}%', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    ],
+      ),
+    );
+  }
+
+  Widget _buildImageGallery(ColorScheme colorScheme) {
+    return SizedBox(
+      height: 120,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _selectedImages.length < 5 ? _selectedImages.length + 1 : 5,
+        itemBuilder: (context, index) {
+          if (index == _selectedImages.length) {
+            return GestureDetector(
+              onTap: () {
+                showModalBottomSheet(
+                  context: context,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                   ),
-                )
-              ],
-            ),
+                  builder: (_) => SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Pilih Sumber Foto', 
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
+                          ),
+                          const SizedBox(height: 24),
+                          Row(
+                            children: [
+                              // Kamera
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () { 
+                                    Navigator.pop(context); 
+                                    _pickImage(ImageSource.camera); 
+                                  },
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 24),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primaryContainer.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: colorScheme.primaryContainer.withOpacity(0.3)),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Icon(Icons.camera_alt, size: 48, color: colorScheme.primary),
+                                        const SizedBox(height: 12),
+                                        Text('Kamera', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              
+                              const SizedBox(width: 16),
+                              
+                              // Galeri
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () { 
+                                    Navigator.pop(context); 
+                                    _pickImage(ImageSource.gallery); 
+                                  },
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 24),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.surfaceVariant.withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        Icon(Icons.photo_library, size: 48, color: colorScheme.primary),
+                                        const SizedBox(height: 12),
+                                        Text('Galeri', style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+              child: Container(
+                width: 100,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest.withOpacity(0.5), 
+                  borderRadius: BorderRadius.circular(12), 
+                  border: Border.all(color: colorScheme.outlineVariant, style: BorderStyle.solid)
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center, 
+                  children: [
+                    Icon(Icons.add_a_photo, color: colorScheme.primary), 
+                    const SizedBox(height: 4), 
+                    const Text('Tambah', style: TextStyle(fontSize: 12))
+                  ]
+                ),
+              ),
+            );
+          }
+          return Stack(
+            children: [
+              Container(
+                width: 100,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), image: DecorationImage(image: FileImage(_selectedImages[index]), fit: BoxFit.cover)),
+              ),
+              Positioned(
+                top: 4, right: 16,
+                child: GestureDetector(
+                  onTap: () => setState(() => _selectedImages.removeAt(index)),
+                  child: const CircleAvatar(radius: 10, backgroundColor: Colors.red, child: Icon(Icons.close, size: 12, color: Colors.white)),
+                ),
+              ),
+              Positioned(
+                bottom: 4, left: 4,
+                child: Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(4)), child: Text('Foto ${index + 1}', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold))),
+              )
+            ],
           );
-        }),
-      ],
+        },
+      ),
     );
   }
 }

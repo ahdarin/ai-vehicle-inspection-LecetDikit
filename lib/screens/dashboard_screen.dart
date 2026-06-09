@@ -35,7 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Icon(Icons.account_circle, color: colorScheme.onSurfaceVariant),
             ),
             const SizedBox(width: 12),
-            Text('AutoCheck AI', 
+            Text('LecetDikit', 
               style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary, fontSize: 20)),
           ],
         ),

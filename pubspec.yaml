@@ -41,6 +41,8 @@ dependencies:
   image: ^4.1.7
   path_provider: ^2.1.4
   image_picker: ^1.0.7
+  pdf: ^3.11.1      # Untuk mendesain layout PDF
+  printing: ^5.12.0 # Untuk mencetak/membagikan PDF
 
 dev_dependencies:
   flutter_test:
