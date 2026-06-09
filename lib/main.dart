@@ -1,9 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:lecetdikit/services/ai_service.dart';
 import 'package:lecetdikit/screens/dashboard_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:lecetdikit/services/auth_service.dart';
+import 'firebase_options.dart';
+import 'package:lecetdikit/screens/login_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  final authService = AuthService();
+  await authService.init();
 
   final aiService = AiService();
   await aiService.loadModel();
@@ -53,8 +65,26 @@ class MyApp extends StatelessWidget {
         fontFamily: 'Inter',
       ),
       
-      // Langsung menuju Beranda
-      home: const DashboardScreen(), 
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          // Selama masih loading koneksi ke Firebase Auth
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              backgroundColor: Color(0xFF0c1324), // Sesuai warna background login Anda
+              body: Center(child: CircularProgressIndicator(color: Color(0xFF38bdf8))),
+            );
+          }
+          
+          // Jika ada data sesi (User sudah pernah login)
+          if (snapshot.hasData) {
+            return const DashboardScreen();
+          }
+          
+          // Jika tidak ada sesi (Belum login)
+          return const LoginScreen();
+        },
+      ), 
     );
   }
 }

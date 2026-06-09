@@ -271,20 +271,6 @@ class ReportScreen extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
-          const SizedBox(height: 12),
-
-          // Tombol Konsultasi Chatbot
-          OutlinedButton.icon(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Membuka Chatbot...')));
-            },
-            icon: const Icon(Icons.smart_toy),
-            label: const Text('Konsultasi Chatbot'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-          ),
           const SizedBox(height: 32),
         ],
       ),

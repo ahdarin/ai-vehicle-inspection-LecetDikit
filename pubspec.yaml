@@ -37,12 +37,19 @@ dependencies:
 
   # Package utama untuk menjalankan model TFLite
   tflite_flutter: ^0.12.1 
+
   # Untuk manipulasi gambar (resize/normalisasi)
   image: ^4.1.7
   path_provider: ^2.1.4
   image_picker: ^1.0.7
+
   pdf: ^3.11.1      # Untuk mendesain layout PDF
   printing: ^5.12.0 # Untuk mencetak/membagikan PDF
+  firebase_core: ^4.10.0
+  firebase_auth: ^6.5.2
+  cloud_firestore: ^6.5.0
+  google_sign_in: ^7.2.0
+
 
 dev_dependencies:
   flutter_test:

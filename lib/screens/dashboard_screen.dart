@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lecetdikit/screens/inspection_screen.dart';
+import 'package:lecetdikit/screens/profile_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -16,8 +17,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     const HomeView(),             // Index 0: Beranda
     const InspectionScreen(),     // Index 1: Halaman Inspeksi Baru
     const Center(child: Text('Riwayat Pengembangan')), // Index 2
-    const Center(child: Text('Chatbot Pengembangan')), // Index 3
-    const Center(child: Text('Profil Pengembangan')),  // Index 4
+    const ProfileScreen(),  // Index 3
   ];
 
   @override
@@ -59,7 +59,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           NavigationDestination(icon: Icon(Icons.home), label: 'Beranda'),
           NavigationDestination(icon: Icon(Icons.document_scanner), label: 'Inspeksi'),
           NavigationDestination(icon: Icon(Icons.history), label: 'Riwayat'),
-          NavigationDestination(icon: Icon(Icons.smart_toy), label: 'Chatbot'),
           NavigationDestination(icon: Icon(Icons.person), label: 'Profil'),
         ],
       ),
@@ -152,33 +151,7 @@ class HomeView extends StatelessWidget {
         ),
 
         const SizedBox(height: 32),
-
-        Row(
-          children: [
-            Expanded(child: _buildGridButton(Icons.history, 'Riwayat', colorScheme)),
-            const SizedBox(width: 16),
-            Expanded(child: _buildGridButton(Icons.smart_toy_outlined, 'Chatbot', colorScheme, isPrimary: true)),
-          ],
-        ),
       ],
-    );
-  }
-
-  Widget _buildGridButton(IconData icon, String title, ColorScheme colorScheme, {bool isPrimary = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(
-        color: isPrimary ? colorScheme.primaryContainer.withOpacity(0.1) : colorScheme.surfaceVariant.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isPrimary ? colorScheme.primaryContainer : colorScheme.outlineVariant.withOpacity(0.5)),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, size: 32, color: colorScheme.primary),
-          const SizedBox(height: 8),
-          Text(title, style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary)),
-        ],
-      ),
     );
   }
 }

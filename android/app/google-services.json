@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "273934132035",
+    "project_id": "lecetdikit-ai",
+    "storage_bucket": "lecetdikit-ai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:273934132035:android:3157cc19f28c46f760c5f6",
+        "android_client_info": {
+          "package_name": "com.example.lecetdikit"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "273934132035-29c3lp7foe0omho0uoguhia0g169k1qs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.lecetdikit",
+            "certificate_hash": "648351e34916a3b1825e56828548c55697717c1a"
+          }
+        },
+        {
+          "client_id": "273934132035-8kuvdrki16s5op6kht43oi6qghmkpru7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDztwOd9zTz4CAW4jV7FZJD5lNEeCZHDDs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "273934132035-8kuvdrki16s5op6kht43oi6qghmkpru7.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "273934132035-ij3q36ci991edqlfdc3pvc5eqv974e7m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.lecetdikit"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
