@@ -5,6 +5,7 @@ import 'package:lecetdikit/screens/dashboard_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lecetdikit/services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'package:lecetdikit/screens/login_screen.dart';
 
@@ -82,7 +83,7 @@ class MyApp extends StatelessWidget {
               }
               if (snapshot.hasData) {
                 final user = snapshot.data;
-                
+
                 if (user != null && !user.isAnonymous && (user.displayName == null || user.displayName!.isEmpty)) {
                   return const ProfileSetupScreen();
                 }

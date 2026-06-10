@@ -205,7 +205,7 @@ class HomeView extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             color: colorScheme.primaryContainer,
             image: DecorationImage(
-              image: const NetworkImage('https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&q=80&w=1200'),
+              image: const AssetImage('assets/images/hero.jpg'),
               fit: BoxFit.cover,
               colorFilter: ColorFilter.mode(colorScheme.primaryContainer.withOpacity(0.85), BlendMode.srcATop),
             ),

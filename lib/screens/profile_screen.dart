@@ -316,13 +316,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildListTile({required IconData icon, required String title, Widget? trailing, bool isHeader = false, required ColorScheme colorScheme, VoidCallback? onTap}) {
-    return ListTile(
-      leading: Icon(icon, color: colorScheme.primary),
-      title: Text(title, style: TextStyle(fontWeight: isHeader ? FontWeight.bold : FontWeight.w500, fontSize: 15, color: colorScheme.onSurface)),
-      trailing: trailing,
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      onTap: onTap,
+    return Material(
+      color: Colors.transparent, // Sangat penting agar warna GlassCard di belakangnya tetap terlihat
+      child: ListTile(
+        leading: Icon(icon, color: colorScheme.primary),
+        title: Text(title, style: TextStyle(fontWeight: isHeader ? FontWeight.bold : FontWeight.w500, fontSize: 15, color: colorScheme.onSurface)),
+        trailing: trailing,
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        onTap: onTap, // Menerapkan aksi klik disini
+      ),
     );
   }
 
