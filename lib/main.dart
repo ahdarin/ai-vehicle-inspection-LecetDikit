@@ -25,6 +25,12 @@ void main() async {
   final aiService = AiService();
   await aiService.loadModel();
 
+  final prefs = await SharedPreferences.getInstance();
+  final isDark = prefs.getBool('isDarkMode');
+  if (isDark != null) {
+    themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+  }
+
   runApp(const MyApp());
 }
 
@@ -35,7 +41,6 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     const seedColor = Color(0xFF131B2E);
     
-    // ValueListenableBuilder akan membangun ulang (rebuild) aplikasi saat tema diubah
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: themeNotifier,
       builder: (_, ThemeMode currentMode, __) {

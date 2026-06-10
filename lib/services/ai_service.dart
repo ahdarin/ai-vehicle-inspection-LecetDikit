@@ -1,10 +1,11 @@
-import 'dart:math'; // Tambahkan untuk fungsi max & min
+import 'dart:math';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:image/image.dart' as img;
+import 'package:flutter/foundation.dart'; // Ditambahkan untuk fungsi compute
 
 // Tambahkan photoIndex agar kita tahu ini lecet di foto ke berapa
 class DetectionResult {
@@ -27,6 +28,31 @@ class DetectionResult {
   });
 }
 
+// --- FUNGSI TOP-LEVEL UNTUK ISOLATE (Berjalan di Background Thread) ---
+Float32List? _isolatePreprocess(Uint8List imageBytes) {
+  try {
+    img.Image? originalImage = img.decodeImage(imageBytes);
+    if (originalImage == null) return null;
+    
+    img.Image resizedImage = img.copyResize(originalImage, width: 640, height: 640);
+
+    var inputList = Float32List(1 * 640 * 640 * 3);
+    var index = 0;
+    for (var y = 0; y < 640; y++) {
+      for (var x = 0; x < 640; x++) {
+        var pixel = resizedImage.getPixel(x, y);
+        inputList[index++] = pixel.r / 255.0;
+        inputList[index++] = pixel.g / 255.0;
+        inputList[index++] = pixel.b / 255.0;
+      }
+    }
+    return inputList;
+  } catch (e) {
+    return null;
+  }
+}
+// ----------------------------------------------------------------------
+
 class AiService {
   Interpreter? _interpreter;
 
@@ -39,7 +65,6 @@ class AiService {
     'Ban Kempes'    // index 5: tire_flat
   ];
 
-  // ... (biarkan fungsi loadModel tetap sama seperti sebelumnya) ...
   Future<void> loadModel() async {
     try {
       final byteData = await rootBundle.load('assets/models/best_float32.tflite');
@@ -48,9 +73,8 @@ class AiService {
 
       await modelFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
       _interpreter = await Interpreter.fromFile(modelFile);
-      print("✅ Model AI siap digunakan!");
     } catch (e) {
-      print("❌ Gagal memuat model: $e");
+      // Print dihapus sesuai instruksi
     }
   }
 
@@ -94,25 +118,14 @@ class AiService {
   }
   // ---------------------------------------------------------
 
-  // Tambahkan parameter photoIndex
   Future<List<DetectionResult>> detectObject(Uint8List imageBytes, {required int photoIndex}) async {
     if (_interpreter == null) return [];
 
     try {
-      img.Image? originalImage = img.decodeImage(imageBytes);
-      if (originalImage == null) return [];
-      img.Image resizedImage = img.copyResize(originalImage, width: 640, height: 640);
+      // OPTIMASI: Memindahkan proses decode, resize, dan normalisasi pixel ke Isolate
+      final Float32List? inputList = await compute(_isolatePreprocess, imageBytes);
+      if (inputList == null) return [];
 
-      var inputList = Float32List(1 * 640 * 640 * 3);
-      var index = 0;
-      for (var y = 0; y < 640; y++) {
-        for (var x = 0; x < 640; x++) {
-          var pixel = resizedImage.getPixel(x, y);
-          inputList[index++] = pixel.r / 255.0;
-          inputList[index++] = pixel.g / 255.0;
-          inputList[index++] = pixel.b / 255.0;
-        }
-      }
       var input = inputList.reshape([1, 640, 640, 3]);
       var output = List.generate(1, (_) => List.generate(10, (_) => List.filled(8400, 0.0)));
 
@@ -140,11 +153,10 @@ class AiService {
         }
       }
 
-      // Terapkan NMS (Threshold IoU 0.45, artinya jika tumpang tindih 45%, buang yang terendah)
+      // Terapkan NMS (Threshold IoU 0.45)
       return _applyNMS(rawResults, 0.45);
 
     } catch (e) {
-      print("❌ Error saat deteksi: $e");
       return [];
     }
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:lecetdikit/services/database_service.dart';
 import 'package:lecetdikit/services/ai_service.dart';
+import 'package:lecetdikit/services/pdf_service.dart';
 import 'package:lecetdikit/widgets/bounding_box_painter.dart';
 import 'package:intl/intl.dart';
 
@@ -218,6 +219,31 @@ class HistoryDetailScreen extends StatelessWidget {
                     ),
                   );
                 }),
+
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menyiapkan dokumen PDF...')));
+                    await PdfService.generateAndPrintReport(
+                      images: images,             // Menggunakan variabel list images lokal
+                      results: results,           // Menggunakan variabel list results lokal
+                      carModel: vehicleName,      // Di database namanya vehicleName
+                      plateNumber: plateNumber,   // Di database namanya plateNumber
+                      carColor: data['carColor'] ?? '-', // Jika tidak disave di db, default '-'
+                      classNames: aiService.classNames, 
+                      inspectionId: reportId,     // Mengambil ID dari parameter kelas
+                      date: formattedDate,
+                    );
+                  },
+                  icon: const Icon(Icons.picture_as_pdf),
+                  label: const Text('Generate PDF Laporan'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: colorScheme.primary,
+                    foregroundColor: colorScheme.onPrimary,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
               const SizedBox(height: 32),
             ],
           );

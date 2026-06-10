@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:lecetdikit/screens/history_detail_screen.dart';
 import 'package:lecetdikit/screens/history_screen.dart';
 import 'package:lecetdikit/screens/inspection_screen.dart';
 import 'package:lecetdikit/screens/profile_screen.dart';
@@ -297,81 +298,168 @@ class HomeView extends StatelessWidget {
             }
 
             // Ambil hanya 1 dokumen terbaru
-            final doc = snapshot.data!.docs.first;
-            final data = doc.data() as Map<String, dynamic>;
-            
-            final String vehicleName = data['vehicleName'] ?? 'Kendaraan';
-            final String plateNumber = data['plateNumber'] ?? '-';
-            final String status = data['status'] ?? 'Sangat Baik';
-            final List<dynamic> localPaths = data['localImagePaths'] ?? [];
-            final String localThumb = localPaths.isNotEmpty ? localPaths[0].toString() : '';
+            final docs = snapshot.data!.docs.take(3).toList();
 
-            Color statusColor = Colors.green;
-            if (status == 'Butuh Perbaikan Segera') statusColor = Colors.red;
-            if (status == 'Minor / Perhatian') statusColor = Colors.orange;
+            return Column(
+              children: docs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
 
-            String timeDisplay = 'Baru saja';
-            if (data['timestamp'] != null) {
-              timeDisplay = DateFormat('d MMM, HH:mm', 'id_ID').format((data['timestamp'] as Timestamp).toDate());
-            }
+                final String reportId = doc.id;
+                final String vehicleName = data['vehicleName'] ?? 'Kendaraan';
+                final String plateNumber = data['plateNumber'] ?? '-';
+                final String status = data['status'] ?? 'Sangat Baik';
+                final List<dynamic> localPaths = data['localImagePaths'] ?? [];
+                final String localThumb =
+                    localPaths.isNotEmpty ? localPaths[0].toString() : '';
 
-            return Container(
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))]
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Gambar Thumbnail & Status
-                    SizedBox(
-                      width: 140, 
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          localThumb.isNotEmpty
-                              ? Image.file(File(localThumb), fit: BoxFit.cover, errorBuilder: (ctx, err, stk) => Container(color: colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image)))
-                              : Container(color: colorScheme.surfaceContainerHighest, child: const Icon(Icons.directions_car)),
-                          Positioned(
-                            top: 8, right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(6), border: Border.all(color: statusColor.withOpacity(0.2))),
-                              child: Row(
+                Color statusColor = Colors.green;
+                if (status == 'Butuh Perbaikan Segera') {
+                  statusColor = Colors.red;
+                }
+                if (status == 'Minor / Perhatian') {
+                  statusColor = Colors.orange;
+                }
+
+                String timeDisplay = 'Baru saja';
+                if (data['timestamp'] != null) {
+                  timeDisplay = DateFormat(
+                    'd MMM, HH:mm',
+                    'id_ID',
+                  ).format((data['timestamp'] as Timestamp).toDate());
+                }
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => HistoryDetailScreen(
+                          reportId: reportId,
+                        ),
+                      ),
+                    ),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: colorScheme.outlineVariant.withOpacity(0.3),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SizedBox(
+                              width: 140,
+                              child: Stack(
+                                fit: StackFit.expand,
                                 children: [
-                                  Container(width: 6, height: 6, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
-                                  const SizedBox(width: 4),
-                                  Text(status.toUpperCase() == 'SANGAT BAIK' ? 'AMAN' : 'ISSUES', style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                  localThumb.isNotEmpty
+                                      ? Image.file(
+                                          File(localThumb),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (ctx, err, stk) => Container(
+                                            color: colorScheme.surfaceContainerHighest,
+                                            child: const Icon(Icons.broken_image),
+                                          ),
+                                        )
+                                      : Container(
+                                          color: colorScheme.surfaceContainerHighest,
+                                          child: const Icon(Icons.directions_car),
+                                        ),
+
+                                  Positioned(
+                                    top: 8,
+                                    right: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.9),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: statusColor.withOpacity(0.2),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 6,
+                                            height: 6,
+                                            decoration: BoxDecoration(
+                                              color: statusColor,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            status.toUpperCase() == 'SANGAT BAIK'
+                                                ? 'AMAN'
+                                                : 'ISSUES',
+                                            style: TextStyle(
+                                              color: statusColor,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    // Detail Informasi Laporan
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(vehicleName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.primary), maxLines: 2, overflow: TextOverflow.ellipsis),
-                            const SizedBox(height: 6),
-                            Text('Plat: $plateNumber\n$timeDisplay', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
+
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      vehicleName,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color: colorScheme.primary,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Plat: $plateNumber\n$timeDisplay',
+                                      style: TextStyle(
+                                        color: colorScheme.onSurfaceVariant,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
                     ),
-                  ],
-                ),
-              ),
+                  )
+                );
+              }).toList(),
             );
           },
         ),
