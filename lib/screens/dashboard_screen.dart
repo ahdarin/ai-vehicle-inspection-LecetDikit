@@ -45,13 +45,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: Row(
           children: [
             Image.asset(
-              'assets/logo.png',
+              'assets/images/logo.png',
               height: 32,
               errorBuilder: (context, error, stackTrace) => Icon(Icons.car_crash, color: colorScheme.primary, size: 32),
             ),
             const SizedBox(width: 12),
             Text(
-              'AutoVision AI',
+              'LecetDikit',
               style: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.primary, fontSize: 20),
             ),
           ],
@@ -65,13 +65,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
             },
             child: Padding(
               padding: const EdgeInsets.only(right: 16.0),
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                backgroundImage: currentUser?.photoURL != null ? NetworkImage(currentUser!.photoURL!) : null,
-                child: currentUser?.photoURL == null 
-                  ? Icon(Icons.person, color: colorScheme.primary) 
-                  : null,
+              
+              child: StreamBuilder<User?>(
+                stream: FirebaseAuth.instance.userChanges(),
+                builder: (context, snapshot) {
+                  final activeUser = snapshot.data ?? currentUser;
+                  return CircleAvatar(
+                    radius: 16,
+                    backgroundColor: colorScheme.surfaceContainerHighest,
+                    backgroundImage: activeUser?.photoURL != null ? NetworkImage(activeUser!.photoURL!) : null,
+                    child: activeUser?.photoURL == null 
+                      ? Icon(Icons.person, color: colorScheme.primary) 
+                      : null,
+                  );
+                }
               ),
             ),
           ),
@@ -171,7 +178,6 @@ class HomeView extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final user = FirebaseAuth.instance.currentUser;
-    final firstName = user?.displayName?.split(' ').first ?? 'Pengendara';
     
     final String currentDate = DateFormat('EEEE, d MMM', 'id_ID').format(DateTime.now());
 
@@ -181,7 +187,16 @@ class HomeView extends StatelessWidget {
         // Salam
         Text(currentDate, style: TextStyle(color: colorScheme.secondary, letterSpacing: 1.5, fontSize: 12, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text('Halo, $firstName', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: colorScheme.primary)),
+
+        StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.userChanges(),
+          builder: (context, snapshot) {
+            final activeUser = snapshot.data ?? user;
+            final firstName = activeUser?.displayName?.split(' ').first ?? 'Pengendara';
+            return Text('Halo, $firstName', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: colorScheme.primary));
+          }
+        ),
+
         Text('Siap untuk inspeksi hari ini?', style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant)),
         const SizedBox(height: 24),
 

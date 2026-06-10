@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lecetdikit/screens/about_screen.dart';
 import 'package:lecetdikit/services/auth_service.dart';
 import 'package:lecetdikit/main.dart'; // Import main.dart untuk akses themeNotifier
 
@@ -42,9 +43,98 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  void _showEditProfileBottomSheet(BuildContext context, ColorScheme colorScheme) {
+    final user = _authService.currentUser;
+    final nameController = TextEditingController(text: user?.displayName);
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colorScheme.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            left: 24,
+            right: 24,
+            top: 24,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Edit Profil', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.primary)),
+                const SizedBox(height: 8),
+                Text('Perbarui nama tampilan akun Anda di bawah ini.', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
+                const SizedBox(height: 24),
+                Text('Nama Lengkap', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: nameController,
+                  style: TextStyle(color: colorScheme.onSurface),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Nama tidak boleh kosong';
+                    return null;
+                  },
+                  decoration: InputDecoration(
+                    prefixIcon: Icon(Icons.person, color: colorScheme.onSurfaceVariant),
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerLow,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.3))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: colorScheme.primaryContainer)),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      if (!formKey.currentState!.validate()) return;
+                      try {
+                        await user?.updateDisplayName(nameController.text.trim());
+                        await user?.reload();
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          setState(() {}); // Memperbarui UI halaman profil seketika
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Profil berhasil diperbarui!')),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Gagal memperbarui profil: $e'), backgroundColor: Colors.redAccent),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorScheme.primaryContainer,
+                      foregroundColor: colorScheme.onPrimaryContainer,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Simpan Perubahan', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = _authService.currentUser;
+    final bool isGuest = user?.isAnonymous ?? true;
     final String displayName = user?.displayName ?? 'Pengguna Tamu';
     final String displayEmail = user?.email ?? 'Tidak ada email tertaut';
     final String initialName = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
@@ -91,25 +181,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 48),
 
             // --- GRUP DETAIL AKUN ---
-            _buildGlassCard(
-              colorScheme: colorScheme,
-              child: Column(
-                children: [
-                  _buildListTile(icon: Icons.person, title: 'Detail Akun', isHeader: true, colorScheme: colorScheme),
-                  Divider(height: 1, color: colorScheme.outlineVariant),
-                  _buildDetailRow('Email', displayEmail, colorScheme),
-                  _buildDetailRow('Status', user?.isAnonymous == true ? 'Mode Tamu' : 'Terverifikasi', colorScheme),
-                ],
+            if (!isGuest) ...[
+              _buildGlassCard(
+                colorScheme: colorScheme,
+                child: Column(
+                  children: [
+                    _buildListTile(icon: Icons.person, title: 'Detail Akun', isHeader: true, colorScheme: colorScheme),
+                    Divider(height: 1, color: colorScheme.outlineVariant),
+                    _buildDetailRow('Email', displayEmail, colorScheme),
+                    _buildDetailRow('Status', 'Terverifikasi', colorScheme),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
 
-            // --- GRUP PENGATURAN (TEMA DINAMIS) ---
+            // --- GRUP PENGATURAN ---
             _buildGlassCard(
               colorScheme: colorScheme,
               child: Column(
                 children: [
                   _buildListTile(icon: Icons.settings, title: 'Pengaturan', isHeader: true, colorScheme: colorScheme),
+                  
+                  // Item Menu Edit Profil Kustom
+                  if (!isGuest) ...[
+                    ListTile(
+                      leading: Icon(Icons.edit_outlined, color: colorScheme.primary),
+                      title: Text('Edit Profil', style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14, color: colorScheme.onSurface)),
+                      subtitle: Text('Ubah nama tampilan akun Anda', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
+                      trailing: Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant),
+                      onTap: () => _showEditProfileBottomSheet(context, colorScheme),
+                    ),
+                    Divider(height: 1, color: colorScheme.outlineVariant.withOpacity(0.3)),
+                  ],
+                  
+                  Divider(height: 1, color: colorScheme.outlineVariant.withOpacity(0.3)),
+                  
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
@@ -125,17 +232,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                         ),
                         
-                        // Dropdown Pilihan Tema
                         DropdownButton<ThemeMode>(
                           value: themeNotifier.value,
                           dropdownColor: colorScheme.surface,
-                          underline: const SizedBox(), // Menghilangkan garis bawah
+                          underline: const SizedBox(),
                           icon: Icon(Icons.arrow_drop_down, color: colorScheme.primary),
                           style: TextStyle(color: colorScheme.primary, fontSize: 14, fontWeight: FontWeight.w500),
                           onChanged: (ThemeMode? newMode) {
                             if (newMode != null) {
                               setState(() {
-                                themeNotifier.value = newMode; // Ubah global tema seketika
+                                themeNotifier.value = newMode;
                               });
                             }
                           },
@@ -156,7 +262,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // --- GRUP TENTANG APLIKASI ---
             _buildGlassCard(
               colorScheme: colorScheme,
-              child: _buildListTile(icon: Icons.info_outline, title: 'Tentang Aplikasi', trailing: Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant), colorScheme: colorScheme),
+              child: _buildListTile(
+                icon: Icons.info_outline, 
+                title: 'Tentang Aplikasi', 
+                trailing: Icon(Icons.chevron_right, color: colorScheme.onSurfaceVariant), 
+                colorScheme: colorScheme,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AboutScreen()),
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 32),
 
@@ -177,8 +294,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             
-            const SizedBox(height: 32),
-            Text('AutoVision AI v2.4.0 • Building Trust in Automotive', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 11)),
           ],
         ),
       ),
@@ -200,13 +315,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildListTile({required IconData icon, required String title, Widget? trailing, bool isHeader = false, required ColorScheme colorScheme}) {
+  Widget _buildListTile({required IconData icon, required String title, Widget? trailing, bool isHeader = false, required ColorScheme colorScheme, VoidCallback? onTap}) {
     return ListTile(
       leading: Icon(icon, color: colorScheme.primary),
       title: Text(title, style: TextStyle(fontWeight: isHeader ? FontWeight.bold : FontWeight.w500, fontSize: 15, color: colorScheme.onSurface)),
       trailing: trailing,
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      onTap: onTap,
     );
   }
 

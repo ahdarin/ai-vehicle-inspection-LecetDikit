@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lecetdikit/screens/profile_setup_screen.dart';
 import 'package:lecetdikit/services/ai_service.dart';
 import 'package:lecetdikit/screens/dashboard_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -80,6 +81,11 @@ class MyApp extends StatelessWidget {
                 );
               }
               if (snapshot.hasData) {
+                final user = snapshot.data;
+                
+                if (user != null && !user.isAnonymous && (user.displayName == null || user.displayName!.isEmpty)) {
+                  return const ProfileSetupScreen();
+                }
                 return const DashboardScreen();
               }
               return const LoginScreen();
