@@ -1,7 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:path_provider/path_provider.dart';
 
 class DatabaseService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -9,31 +9,35 @@ class DatabaseService {
 
   String get _uid => _auth.currentUser?.uid ?? 'guest';
 
-  // 1. Menyimpan hasil dari kamera AI (Dengan ID Custom dan Data Lengkap)
+  // 1. Simpan Data Inspeksi (Sinkronisasi Tipe Data 100%)
   Future<void> saveInspection({
-    required String reportId, // ID custom (LD-...)
+    required String reportId,
     required String vehicleName,
     required String plateNumber,
     required String status,
-    required List<File> images, // Terima file asli
-    required List<Map<String, dynamic>> findings, // Terima detail temuan
+    required List<File> images,
+    required List<Map<String, dynamic>> findings, // Menyimpan koordinat AI
   }) async {
     try {
-      // Ubah gambar pertama menjadi Base64 untuk thumbnail (agar tersimpan tanpa Firebase Storage)
-      String base64Image = '';
-      if (images.isNotEmpty) {
-        final bytes = await images[0].readAsBytes();
-        base64Image = base64Encode(bytes);
+      // Simpan file gambar secara lokal di dalam folder aplikasi
+      final directory = await getApplicationDocumentsDirectory();
+      List<String> localImagePaths = [];
+      
+      for (int i = 0; i < images.length; i++) {
+        final String ext = images[i].path.split('.').last;
+        final String fileName = '${reportId}_$i.$ext';
+        final File localImage = await images[i].copy('${directory.path}/$fileName');
+        localImagePaths.add(localImage.path); // Simpan path-nya
       }
 
-      // Gunakan reportId dari parameter sebagai Document ID
+      // Simpan data terstruktur ke Firestore
       await _db.collection('users').doc(_uid).collection('reports').doc(reportId).set({
         'id': reportId,
         'vehicleName': vehicleName,
         'plateNumber': plateNumber,
-        'status': status, // Jangan di uppercase agar logic warna bekerja
+        'status': status,
         'timestamp': FieldValue.serverTimestamp(),
-        'imageBase64': base64Image, // Simpan sebagai string Base64
+        'localImagePaths': localImagePaths,
         'findings': findings,
       });
     } catch (e) {
@@ -41,18 +45,31 @@ class DatabaseService {
     }
   }
 
-  // 2. Stream untuk daftar riwayat
+  // 2. Stream Daftar Riwayat
   Stream<QuerySnapshot> streamInspections() {
-    return _db
-        .collection('users')
-        .doc(_uid)
-        .collection('reports')
-        .orderBy('timestamp', descending: true)
-        .snapshots();
+    return _db.collection('users').doc(_uid).collection('reports')
+        .orderBy('timestamp', descending: true).snapshots();
   }
 
-  // 3. Mengambil detail tunggal
+  // 3. Mengambil Detail Riwayat
   Future<DocumentSnapshot> getReportById(String reportId) {
     return _db.collection('users').doc(_uid).collection('reports').doc(reportId).get();
+  }
+
+  // 4. Hapus Riwayat + Hapus Gambar Lokal
+  Future<void> deleteInspection(String reportId) async {
+    try {
+      DocumentSnapshot doc = await getReportById(reportId);
+      if (doc.exists) {
+        List<dynamic> paths = doc.get('localImagePaths') ?? [];
+        for (String path in paths) {
+          final file = File(path);
+          if (await file.exists()) await file.delete();
+        }
+      }
+      await _db.collection('users').doc(_uid).collection('reports').doc(reportId).delete();
+    } catch (e) {
+      rethrow;
+    }
   }
 }

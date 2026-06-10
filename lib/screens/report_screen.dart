@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:lecetdikit/services/ai_service.dart';
 import 'package:lecetdikit/widgets/bounding_box_painter.dart';
 import 'package:lecetdikit/services/pdf_service.dart';
-import 'package:lecetdikit/services/database_service.dart'; // Import Database
+import 'package:lecetdikit/services/database_service.dart';
 
 class ReportScreen extends StatefulWidget {
   final List<File> images;
@@ -39,7 +39,7 @@ class _ReportScreenState extends State<ReportScreen> {
     _inspectionId = _generateInspectionID();
     _formattedDate = _getFormattedDate();
     
-    // Otomatis simpan data ke Firestore saat selesai inspeksi
+    // Otomatis simpan data saat halaman diload
     _saveToDatabase();
   }
 
@@ -49,24 +49,26 @@ class _ReportScreenState extends State<ReportScreen> {
     try {
       final statusUmum = _calculateGeneralStatus(widget.results);
       
-      // 1. Ubah hasil deteksi menjadi format Map agar semua detail (AI Match, dsb) tersimpan
+      // SINKRONISASI DATA: Kita merubah objek deteksi menjadi Map agar 100% detail tersimpan
       final List<Map<String, dynamic>> detailedFindings = widget.results.map((r) {
         return {
-          'damageName': _aiService.classNames[r.classIndex],
-          'photoIndex': r.photoIndex,
+          'classIndex': r.classIndex,
           'confidence': r.confidence,
-          'isHeavy': _isHeavyDamage(r),
+          'photoIndex': r.photoIndex,
+          'x': r.x,
+          'y': r.y,
+          'w': r.w,
+          'h': r.h,
         };
       }).toList();
 
-      // 2. Panggil fungsi penyimpanan dengan parameter yang baru
       await _dbService.saveInspection(
-        reportId: _inspectionId, // Simpan ID LD-XXX agar sama dengan yang di Report
+        reportId: _inspectionId,
         vehicleName: widget.carModel.isNotEmpty ? widget.carModel : 'Mobil Tidak Dikenal',
         plateNumber: widget.plateNumber.isNotEmpty ? widget.plateNumber : '-',
         status: statusUmum,
-        images: widget.images, // Kirim list File asli (Service akan mengurus Base64-nya)
-        findings: detailedFindings, // Kirim detail temuan
+        images: widget.images,
+        findings: detailedFindings,
       );
       
       _isSaved = true;
@@ -74,7 +76,6 @@ class _ReportScreenState extends State<ReportScreen> {
       debugPrint('Gagal menyimpan ke database: $e');
     }
   }
-
 
   String _getFormattedDate() {
     final now = DateTime.now();
@@ -117,7 +118,6 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final isSafe = widget.results.isEmpty;
-    
     final statusUmum = _calculateGeneralStatus(widget.results);
     final statusColor = _getStatusColor(statusUmum);
 
@@ -265,7 +265,6 @@ class _ReportScreenState extends State<ReportScreen> {
             }),
 
           const SizedBox(height: 24),
-
           ElevatedButton.icon(
             onPressed: () async {
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menyiapkan dokumen PDF...')));

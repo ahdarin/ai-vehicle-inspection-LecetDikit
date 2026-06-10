@@ -1,12 +1,25 @@
-import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:lecetdikit/services/database_service.dart';
+import 'package:lecetdikit/services/ai_service.dart';
+import 'package:lecetdikit/widgets/bounding_box_painter.dart';
 import 'package:intl/intl.dart';
 
 class HistoryDetailScreen extends StatelessWidget {
   final String reportId;
   const HistoryDetailScreen({super.key, required this.reportId});
+
+  bool _isHeavyDamage(DetectionResult res, AiService aiService) {
+    String damageType = aiService.classNames[res.classIndex];
+    if (damageType == 'Kaca Pecah' || damageType == 'Lampu Pecah' || damageType == 'Ban Kempes') return true; 
+    double area = res.w * res.h;
+    double maxLength = res.w > res.h ? res.w : res.h;
+    if (damageType == 'Goresan' && maxLength > 0.40) return true;
+    if (damageType == 'Retak' && maxLength > 0.25) return true;
+    if (damageType == 'Penyok' && area > 0.15) return true;
+    return false;
+  }
 
   Color _getStatusColor(String status) {
     if (status == 'Sangat Baik') return Colors.green;
@@ -19,6 +32,7 @@ class HistoryDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final DatabaseService dbService = DatabaseService();
+    final AiService aiService = AiService();
 
     return Scaffold(
       appBar: AppBar(
@@ -29,29 +43,42 @@ class HistoryDetailScreen extends StatelessWidget {
       body: FutureBuilder<DocumentSnapshot>(
         future: dbService.getReportById(reportId),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text('Laporan tidak ditemukan.'));
-          }
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: Text('Laporan tidak ditemukan.'));
 
           final data = snapshot.data!.data() as Map<String, dynamic>;
           final String vehicleName = data['vehicleName'] ?? '';
           final String plateNumber = data['plateNumber'] ?? '';
           final String statusUmum = data['status'] ?? 'Sangat Baik';
-          final String base64Image = data['imageBase64'] ?? '';
-          final List<dynamic> findings = data['findings'] ?? [];
-          final bool isSafe = findings.isEmpty;
           
+          // Mengambil gambar dari memory lokal
+          final List<dynamic> localPaths = data['localImagePaths'] ?? [];
+          final List<File> images = localPaths.map((path) => File(path.toString())).toList();
+          
+          // Membangun ulang tipe data DetectionResult agar bounding box bisa digambar lagi!
+          final List<dynamic> rawFindings = data['findings'] ?? [];
+          final List<DetectionResult> results = rawFindings.map((f) {
+            return DetectionResult(
+              classIndex: f['classIndex'] ?? 0,
+              confidence: f['confidence'] ?? 0.0,
+              photoIndex: f['photoIndex'] ?? 1,
+              x: f['x'] ?? 0.0,
+              y: f['y'] ?? 0.0,
+              w: f['w'] ?? 0.0,
+              h: f['h'] ?? 0.0,
+            );
+          }).toList();
+
+          final bool isSafe = results.isEmpty;
+          final statusColor = _getStatusColor(statusUmum);
+
           String formattedDate = '-';
           if (data['timestamp'] != null) {
             final now = (data['timestamp'] as Timestamp).toDate();
             formattedDate = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
           }
 
-          final statusColor = _getStatusColor(statusUmum);
-
+          // KODE DI BAWAH INI KLONING 100% REPORT SCREEN
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -64,31 +91,42 @@ class HistoryDetailScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text('Hasil Analisis', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-              if (vehicleName.isNotEmpty && vehicleName != 'Mobil Tidak Dikenal' || plateNumber.isNotEmpty && plateNumber != '-')
+              if (vehicleName.isNotEmpty || plateNumber.isNotEmpty)
                 Padding(padding: const EdgeInsets.only(top: 4), child: Text('$vehicleName • $plateNumber', style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant))),
               
               const SizedBox(height: 24),
 
-              // Render Gambar dari Base64
-              if (base64Image.isNotEmpty)
-                Column(
+              ...List.generate(images.length, (index) {
+                int currentPhotoIndex = index + 1;
+                var photoResults = results.where((r) => r.photoIndex == currentPhotoIndex).toList();
+
+                return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: colorScheme.primary, borderRadius: const BorderRadius.only(topLeft: Radius.circular(8), topRight: Radius.circular(8))),
-                      child: Text('FOTO 1', style: TextStyle(color: colorScheme.onPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
+                      child: Text('FOTO $currentPhotoIndex', style: TextStyle(color: colorScheme.onPrimary, fontSize: 12, fontWeight: FontWeight.bold)),
                     ),
                     ClipRRect(
                       borderRadius: const BorderRadius.only(topRight: Radius.circular(8), bottomLeft: Radius.circular(8), bottomRight: Radius.circular(8)),
                       child: Container(
                         decoration: BoxDecoration(border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.5))),
-                        child: Image.memory(base64Decode(base64Image), width: double.infinity, fit: BoxFit.fitWidth),
+                        child: Stack(
+                          children: [
+                            Image.file(images[index], width: double.infinity, fit: BoxFit.fitWidth, 
+                              errorBuilder: (context, error, stackTrace) => Container(height: 200, color: colorScheme.surfaceContainerHighest, child: const Center(child: Icon(Icons.broken_image, size: 50, color: Colors.grey)))
+                            ),
+                            // Bounding Box kini berfungsi di Riwayat!
+                            Positioned.fill(child: CustomPaint(painter: BoundingBoxPainter(photoResults, aiService.classNames))),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
                   ],
-                ),
+                );
+              }),
 
               Row(
                 children: [
@@ -101,7 +139,7 @@ class HistoryDetailScreen extends StatelessWidget {
                         children: [
                           Text('TOTAL KERUSAKAN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.secondary)),
                           const SizedBox(height: 8),
-                          Text('${findings.length} Titik', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: colorScheme.onSurface))
+                          Text('${results.length} Titik', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: colorScheme.onSurface))
                         ],
                       ),
                     )
@@ -131,13 +169,9 @@ class HistoryDetailScreen extends StatelessWidget {
               if (isSafe)
                 const Card(child: ListTile(leading: Icon(Icons.check_circle, color: Colors.green), title: Text('Kondisi eksterior sangat baik.')))
               else
-                ...findings.map((res) {
-                  // Ekstrak Map yang kita simpan tadi
-                  Map<String, dynamic> findingMap = res as Map<String, dynamic>;
-                  String damageName = findingMap['damageName'] ?? 'Tidak Dikenal';
-                  int photoIndex = findingMap['photoIndex'] ?? 1;
-                  double confidence = findingMap['confidence'] ?? 0.0;
-                  bool isHeavy = findingMap['isHeavy'] ?? false;
+                ...results.map((res) {
+                  String damageName = aiService.classNames[res.classIndex];
+                  bool isHeavy = _isHeavyDamage(res, aiService); 
                   
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
@@ -174,9 +208,9 @@ class HistoryDetailScreen extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 4),
-                              Text('Kerusakan terdeteksi pada Foto $photoIndex.', style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant)),
+                              Text('Kerusakan terdeteksi pada Foto ${res.photoIndex}.', style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant)),
                               const SizedBox(height: 8),
-                              Text('AI Match: ${(confidence * 100).toStringAsFixed(1)}%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary))
+                              Text('AI Match: ${(res.confidence * 100).toStringAsFixed(1)}%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: colorScheme.secondary))
                             ],
                           ),
                         )

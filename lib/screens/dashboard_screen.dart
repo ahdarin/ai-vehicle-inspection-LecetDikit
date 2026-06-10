@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lecetdikit/screens/history_screen.dart';
@@ -5,6 +8,7 @@ import 'package:lecetdikit/screens/inspection_screen.dart';
 import 'package:lecetdikit/screens/profile_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:lecetdikit/services/database_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -76,58 +80,62 @@ class _DashboardScreenState extends State<DashboardScreen> {
       
       body: _pages[_selectedIndex], 
 
-      // --- TOMBOL INSPEKSI (FAB) ---
-      floatingActionButton: SizedBox(
-        height: 64, 
-        width: 64,
-        child: FloatingActionButton(
-          shape: const CircleBorder(),
-          backgroundColor: colorScheme.primaryContainer,
-          elevation: 6,
-          onPressed: () {
-            setState(() {
-              _selectedIndex = 1;
-            });
-          },
-          child: Icon(Icons.document_scanner, color: colorScheme.onPrimaryContainer, size: 30),
+      // --- BOTTOM NAVIGATION BAR KUSTOM (RATA BAWAH) ---
+      bottomNavigationBar: Container(
+        height: 80, // Tinggi navbar disesuaikan agar pas di dalam row
+        decoration: BoxDecoration(
+          color: colorScheme.surface,
+          border: Border(top: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.2))),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, -4)),
+          ],
         ),
-      ),
-      // Posisi FAB agak diturunkan
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-
-      // --- BOTTOM NAVIGATION BAR ---
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8.0, 
-        color: colorScheme.surface,
-        elevation: 10,
-        clipBehavior: Clip.antiAlias,
-        child: SizedBox(
-          height: 65, 
-          child: Row(
-            children: [
-              // Menggunakan Expanded agar tidak Overflow
-              Expanded(
-                child: _buildNavButton(
-                  icon: Icons.home, 
-                  label: 'Beranda', 
-                  index: 0, 
-                  colorScheme: colorScheme,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            // Menu Beranda (Kiri)
+            Expanded(
+              child: _buildNavButton(
+                icon: Icons.home, 
+                label: 'Beranda', 
+                index: 0, 
+                colorScheme: colorScheme,
+              ),
+            ),
+            
+            // Tombol Inspeksi Tengah (Rata di dalam row, tetap berbentuk lingkaran)
+            Expanded(
+              child: Center(
+                child: SizedBox(
+                  width: 56, 
+                  height: 56,
+                  child: Material(
+                    color: _selectedIndex == 1 ? colorScheme.primary : colorScheme.primaryContainer,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => setState(() => _selectedIndex = 1),
+                      child: Icon(
+                        Icons.document_scanner, 
+                        color: _selectedIndex == 1 ? colorScheme.onPrimary : colorScheme.onPrimaryContainer, 
+                        size: 26,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-              
-              const SizedBox(width: 64), // Ruang di tengah untuk FAB
-              
-              Expanded(
-                child: _buildNavButton(
-                  icon: Icons.person, 
-                  label: 'Profil', 
-                  index: 2, 
-                  colorScheme: colorScheme,
-                ),
+            ),
+            
+            // Menu Profil (Kanan)
+            Expanded(
+              child: _buildNavButton(
+                icon: Icons.person, 
+                label: 'Profil', 
+                index: 2, 
+                colorScheme: colorScheme,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -252,57 +260,96 @@ class HomeView extends StatelessWidget {
             Text('Laporan Terakhir', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.primary)),
             GestureDetector(
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const HistoryScreen()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const HistoryScreen()));
               },
-              child: Text('Lihat Semua', style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.w600, fontSize: 14)),
+              child: Text('Lihat Semua', style: TextStyle(color: colorScheme.secondary, fontWeight: FontWeight.w600, fontSize: 14)),
             ),
           ],
         ),
         const SizedBox(height: 16),
 
-        // --- KARTU RIWAYAT (Desain Vertikal: Foto di atas) ---
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
-            boxShadow: [
-              BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
-            ]
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Gambar Thumbnail & Status (Di Bagian Atas)
-              SizedBox(
-                height: 160, 
-                width: double.infinity,
-                child: Stack(
-                  fit: StackFit.expand,
+        // STREAM REAL TIME DARI DATABASE
+        StreamBuilder<QuerySnapshot>(
+          stream: DatabaseService().streamInspections(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: colorScheme.surfaceContainerHighest.withOpacity(0.3), borderRadius: BorderRadius.circular(16), border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3))),
+                child: const Center(child: Text('Belum ada inspeksi kendaraan.', style: TextStyle(fontWeight: FontWeight.w500))),
+              );
+            }
+
+            // Ambil hanya 1 dokumen terbaru
+            final doc = snapshot.data!.docs.first;
+            final data = doc.data() as Map<String, dynamic>;
+            
+            final String vehicleName = data['vehicleName'] ?? 'Kendaraan';
+            final String plateNumber = data['plateNumber'] ?? '-';
+            final String status = data['status'] ?? 'Sangat Baik';
+            final List<dynamic> localPaths = data['localImagePaths'] ?? [];
+            final String localThumb = localPaths.isNotEmpty ? localPaths[0].toString() : '';
+
+            Color statusColor = Colors.green;
+            if (status == 'Butuh Perbaikan Segera') statusColor = Colors.red;
+            if (status == 'Minor / Perhatian') statusColor = Colors.orange;
+
+            String timeDisplay = 'Baru saja';
+            if (data['timestamp'] != null) {
+              timeDisplay = DateFormat('d MMM, HH:mm', 'id_ID').format((data['timestamp'] as Timestamp).toDate());
+            }
+
+            return Container(
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))]
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Image.network(
-                      'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=600&auto=format&fit=crop', 
-                      fit: BoxFit.cover,
+                    // Gambar Thumbnail & Status
+                    SizedBox(
+                      width: 140, 
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          localThumb.isNotEmpty
+                              ? Image.file(File(localThumb), fit: BoxFit.cover, errorBuilder: (ctx, err, stk) => Container(color: colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image)))
+                              : Container(color: colorScheme.surfaceContainerHighest, child: const Icon(Icons.directions_car)),
+                          Positioned(
+                            top: 8, right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.9), borderRadius: BorderRadius.circular(6), border: Border.all(color: statusColor.withOpacity(0.2))),
+                              child: Row(
+                                children: [
+                                  Container(width: 6, height: 6, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
+                                  const SizedBox(width: 4),
+                                  Text(status.toUpperCase() == 'SANGAT BAIK' ? 'AMAN' : 'ISSUES', style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    Positioned(
-                      top: 12, right: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFF006A60).withOpacity(0.2)),
-                        ),
-                        child: Row(
+                    
+                    // Detail Informasi Laporan
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF006A60), shape: BoxShape.circle)),
-                            const SizedBox(width: 6),
-                            const Text('AMAN', style: TextStyle(color: Color(0xFF006A60), fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                            Text(vehicleName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: colorScheme.primary), maxLines: 2, overflow: TextOverflow.ellipsis),
+                            const SizedBox(height: 6),
+                            Text('Plat: $plateNumber\n$timeDisplay', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12)),
                           ],
                         ),
                       ),
@@ -310,50 +357,11 @@ class HomeView extends StatelessWidget {
                   ],
                 ),
               ),
-              
-              // Detail Informasi Laporan (Di Bagian Bawah)
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Honda Civic RS 2023', 
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: colorScheme.primary), 
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text('ID: 88A-92', style: TextStyle(color: colorScheme.secondary, fontSize: 12, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text('Plat: B 1234 XYZ • 15 Menit yang lalu', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
-                    const SizedBox(height: 16),
-                    
-                    // Chips Temuan
-                    Wrap(
-                      spacing: 8, runSpacing: 8,
-                      children: [
-                        _buildFindingChip('Eksterior Lulus', colorScheme.surfaceContainerHighest, colorScheme.onSurfaceVariant),
-                        _buildFindingChip('Interior Lulus', colorScheme.surfaceContainerHighest, colorScheme.onSurfaceVariant),
-                        _buildFindingChip('Goresan Halus Bumper', colorScheme.errorContainer.withOpacity(0.5), colorScheme.error, isError: true, borderColor: colorScheme.error.withOpacity(0.3)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         ),
 
-        const SizedBox(height: 100), // Ruang bawah ekstra 
+        const SizedBox(height: 100), // Ruang bawah ekstra
       ],
     );
   }

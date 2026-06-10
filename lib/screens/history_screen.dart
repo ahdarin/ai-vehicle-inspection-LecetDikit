@@ -1,10 +1,9 @@
-import 'dart:convert';
-
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:lecetdikit/screens/history_detail_screen.dart';
 import 'package:lecetdikit/services/database_service.dart';
-import 'package:lecetdikit/screens/report_screen.dart';
+import 'package:lecetdikit/services/ai_service.dart';
+import 'package:lecetdikit/screens/history_detail_screen.dart';
 import 'package:intl/intl.dart';
 
 class HistoryScreen extends StatefulWidget {
@@ -16,6 +15,29 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   final DatabaseService _dbService = DatabaseService();
+  final AiService _aiService = AiService();
+
+  void _confirmDelete(String reportId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Riwayat', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Apakah Anda yakin ingin menghapus laporan ini beserta fotonya secara permanen?'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () {
+              _dbService.deleteInspection(reportId);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Hapus', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ]
+      )
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,12 +48,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
         elevation: 0,
-        foregroundColor: colorScheme.primary, // Otomatis menyesuaikan warna Light/Dark untuk tombol Back
+        foregroundColor: colorScheme.primary,
       ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- JUDUL DI ATAS & TEKS KECIL ---
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
@@ -45,18 +66,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
           ),
 
-          // --- LIST DATA DARI FIRESTORE ---
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: _dbService.streamInspections(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(child: Text('Belum ada riwayat inspeksi.', style: TextStyle(color: colorScheme.onSurfaceVariant)));
-                }
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return Center(child: Text('Belum ada riwayat inspeksi.', style: TextStyle(color: colorScheme.onSurfaceVariant)));
 
                 final docs = snapshot.data!.docs;
 
@@ -69,17 +84,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     final String reportId = data['id'] ?? '';
                     final String vehicleName = data['vehicleName'] ?? 'Kendaraan';
                     final String plateNumber = data['plateNumber'] ?? '-';
-                    final String status = data['status'] ?? 'AMAN';
-                    final List<dynamic> findings = data['findings'] ?? [];
-                    final String base64Image = data['imageBase64'] ?? '';
+                    final String status = data['status'] ?? 'Sangat Baik';
                     
+                    // Baca gambar lokal
+                    final List<dynamic> localPaths = data['localImagePaths'] ?? [];
+                    final String localThumb = localPaths.isNotEmpty ? localPaths[0].toString() : '';
+
+                    // Menentukan warna
+                    Color statusColor = Colors.green;
+                    if (status == 'Butuh Perbaikan Segera') statusColor = Colors.red;
+                    if (status == 'Minor / Perhatian') statusColor = Colors.orange;
+
                     String timeDisplay = 'Baru saja';
                     if (data['timestamp'] != null) {
-                      final Timestamp timestamp = data['timestamp'];
-                      timeDisplay = DateFormat('d MMM yyyy, HH:mm', 'id_ID').format(timestamp.toDate());
+                      timeDisplay = DateFormat('d MMM yyyy, HH:mm', 'id_ID').format((data['timestamp'] as Timestamp).toDate());
                     }
 
-                    // --- DESAIN KARTU SAMA DENGAN DASHBOARD + TOMBOL ---
+                    // Menghindari error tipe data dengan membaca list dynamic secara aman
+                    final List<dynamic> rawFindings = data['findings'] ?? [];
+
                     return Container(
                       margin: const EdgeInsets.only(bottom: 24),
                       width: double.infinity,
@@ -87,29 +110,20 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         color: colorScheme.surface,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.3)),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4)),
-                        ]
+                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))]
                       ),
                       clipBehavior: Clip.antiAlias,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Gambar Thumbnail & Status (Di Bagian Atas)
                           SizedBox(
                             height: 160, 
-                            width: double.infinity,
                             child: Stack(
                               fit: StackFit.expand,
                               children: [
-                                Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    base64Image.isNotEmpty 
-                                      ? Image.memory(base64Decode(base64Image), fit: BoxFit.cover)
-                                      : Image.network('https://images.unsplash.com/photo-1494976388531-d1058494cdd8?q=80&w=600', fit: BoxFit.cover),
-                                  ],
-                                ),
+                                localThumb.isNotEmpty
+                                  ? Image.file(File(localThumb), fit: BoxFit.cover, errorBuilder: (ctx, err, stk) => Container(color: colorScheme.surfaceContainerHighest, child: const Icon(Icons.broken_image, size: 40)))
+                                  : Container(color: colorScheme.surfaceContainerHighest, child: const Icon(Icons.directions_car, size: 40)),
                                 Positioned(
                                   top: 12, right: 12,
                                   child: Container(
@@ -117,13 +131,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     decoration: BoxDecoration(
                                       color: Colors.white.withOpacity(0.9),
                                       borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: (status == 'AMAN' ? const Color(0xFF006A60) : colorScheme.error).withOpacity(0.2)),
+                                      border: Border.all(color: statusColor.withOpacity(0.2)),
                                     ),
                                     child: Row(
                                       children: [
-                                        Container(width: 8, height: 8, decoration: BoxDecoration(color: status == 'AMAN' ? const Color(0xFF006A60) : colorScheme.error, shape: BoxShape.circle)),
+                                        Container(width: 8, height: 8, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
                                         const SizedBox(width: 6),
-                                        Text(status, style: TextStyle(color: status == 'AMAN' ? const Color(0xFF006A60) : colorScheme.error, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+                                        Text(status.toUpperCase(), style: TextStyle(color: statusColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
                                       ],
                                     ),
                                   ),
@@ -132,7 +146,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             ),
                           ),
                           
-                          // Detail Informasi Laporan & Tombol Detail (Di Bagian Bawah)
                           Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Column(
@@ -142,44 +155,59 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Expanded(
-                                      child: Text(vehicleName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: colorScheme.primary), maxLines: 1, overflow: TextOverflow.ellipsis),
-                                    ),
+                                    Expanded(child: Text(vehicleName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: colorScheme.primary), maxLines: 1, overflow: TextOverflow.ellipsis)),
                                     const SizedBox(width: 8),
-                                    Text('ID: ${reportId.substring(0, 5).toUpperCase()}', style: TextStyle(color: colorScheme.secondary, fontSize: 12, fontFamily: 'Courier', fontWeight: FontWeight.bold)),
+                                    Text('ID: ${reportId.substring(0, 8)}', style: TextStyle(color: colorScheme.secondary, fontSize: 12, fontWeight: FontWeight.bold)),
                                   ],
                                 ),
                                 const SizedBox(height: 6),
                                 Text('Plat: $plateNumber • $timeDisplay', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13)),
                                 const SizedBox(height: 16),
                                 
-                                // Chips Temuan
                                 Wrap(
                                   spacing: 8, runSpacing: 8,
-                                  children: findings.map((finding) {
-                                    final isError = !finding.toString().toLowerCase().contains('lulus');
-                                    return _buildFindingChip(finding, isError ? colorScheme.errorContainer.withOpacity(0.5) : colorScheme.surfaceContainerHighest, isError ? colorScheme.error : colorScheme.onSurfaceVariant, isError: isError, borderColor: isError ? colorScheme.error.withOpacity(0.3) : Colors.transparent);
+                                  children: rawFindings.map((finding) {
+                                    if (finding is Map) {
+                                      int clsIdx = finding['classIndex'] ?? 0;
+                                      String damageName = _aiService.classNames[clsIdx];
+                                      bool isHeavy = damageName == 'Kaca Pecah' || damageName == 'Lampu Pecah' || damageName == 'Ban Kempes';
+                                      
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(color: isHeavy ? colorScheme.errorContainer.withOpacity(0.5) : colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(6), border: Border.all(color: isHeavy ? colorScheme.error.withOpacity(0.3) : Colors.transparent)),
+                                        child: Text(damageName.toUpperCase(), style: TextStyle(color: isHeavy ? colorScheme.error : colorScheme.onSurfaceVariant, fontSize: 11, fontWeight: FontWeight.bold)),
+                                      );
+                                    }
+                                    return const SizedBox();
                                   }).toList(),
                                 ),
                                 const SizedBox(height: 20),
 
-                                // Tombol Detail Laporan
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 48,
-                                  child: OutlinedButton.icon(
-                                    onPressed: () {
-                                      Navigator.push(context, MaterialPageRoute(builder: (context) => HistoryDetailScreen(reportId: reportId)));
-                                    },
-                                    icon: const Icon(Icons.analytics_outlined),
-                                    label: const Text('Detail Laporan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                    style: OutlinedButton.styleFrom(
-                                      side: BorderSide(color: colorScheme.outlineVariant),
-                                      foregroundColor: colorScheme.primary,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                // Tombol Detail & Delete
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: SizedBox(
+                                        height: 45,
+                                        child: OutlinedButton.icon(
+                                          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => HistoryDetailScreen(reportId: reportId))),
+                                          icon: const Icon(Icons.analytics_outlined),
+                                          label: const Text('Detail Laporan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                          style: OutlinedButton.styleFrom(side: BorderSide(color: colorScheme.outlineVariant), foregroundColor: colorScheme.primary, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
+                                    const SizedBox(width: 12),
+                                    Container(
+                                      height: 45, width: 45,
+                                      decoration: BoxDecoration(color: colorScheme.errorContainer.withOpacity(0.3), borderRadius: BorderRadius.circular(10), border: Border.all(color: colorScheme.error.withOpacity(0.3))),
+                                      child: IconButton(
+                                        icon: Icon(Icons.delete_outline, color: colorScheme.error, size: 22),
+                                        onPressed: () => _confirmDelete(reportId),
+                                      ),
+                                    ),
+                                  ],
+                                )
                               ],
                             ),
                           ),
@@ -193,14 +221,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildFindingChip(String label, Color bgColor, Color textColor, {bool isError = false, Color? borderColor}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(6), border: Border.all(color: borderColor ?? Colors.transparent)),
-      child: Text(label, style: TextStyle(color: textColor, fontSize: 12, fontFamily: 'Courier', fontWeight: isError ? FontWeight.bold : FontWeight.w600)),
     );
   }
 }
