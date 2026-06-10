@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:lecetdikit/screens/history_screen.dart';
 import 'package:lecetdikit/screens/inspection_screen.dart';
 import 'package:lecetdikit/screens/profile_screen.dart';
 import 'package:intl/intl.dart';
@@ -250,8 +251,13 @@ class HomeView extends StatelessWidget {
           children: [
             Text('Laporan Terakhir', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.primary)),
             GestureDetector(
-              onTap: () {},
-              child: Text('Lihat Semua', style: TextStyle(color: colorScheme.primaryContainer, fontWeight: FontWeight.w600, fontSize: 14)),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const HistoryScreen()),
+                );
+              },
+              child: Text('Lihat Semua', style: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.w600, fontSize: 14)),
             ),
           ],
         ),

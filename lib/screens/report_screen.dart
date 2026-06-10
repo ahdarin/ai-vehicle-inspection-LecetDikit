@@ -3,16 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:lecetdikit/services/ai_service.dart';
 import 'package:lecetdikit/widgets/bounding_box_painter.dart';
 import 'package:lecetdikit/services/pdf_service.dart';
+import 'package:lecetdikit/services/database_service.dart'; // Import Database
 
-class ReportScreen extends StatelessWidget {
+class ReportScreen extends StatefulWidget {
   final List<File> images;
   final List<DetectionResult> results;
   final String carModel;
   final String plateNumber;
   final String carColor;
-  final AiService _aiService = AiService();
 
-  ReportScreen({
+  const ReportScreen({
     super.key,
     required this.images,
     required this.results,
@@ -21,6 +21,61 @@ class ReportScreen extends StatelessWidget {
     required this.carColor,
   });
 
+  @override
+  State<ReportScreen> createState() => _ReportScreenState();
+}
+
+class _ReportScreenState extends State<ReportScreen> {
+  final AiService _aiService = AiService();
+  final DatabaseService _dbService = DatabaseService();
+  
+  bool _isSaved = false;
+  late String _inspectionId;
+  late String _formattedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _inspectionId = _generateInspectionID();
+    _formattedDate = _getFormattedDate();
+    
+    // Otomatis simpan data ke Firestore saat selesai inspeksi
+    _saveToDatabase();
+  }
+
+  Future<void> _saveToDatabase() async {
+    if (_isSaved) return;
+
+    try {
+      final statusUmum = _calculateGeneralStatus(widget.results);
+      
+      // 1. Ubah hasil deteksi menjadi format Map agar semua detail (AI Match, dsb) tersimpan
+      final List<Map<String, dynamic>> detailedFindings = widget.results.map((r) {
+        return {
+          'damageName': _aiService.classNames[r.classIndex],
+          'photoIndex': r.photoIndex,
+          'confidence': r.confidence,
+          'isHeavy': _isHeavyDamage(r),
+        };
+      }).toList();
+
+      // 2. Panggil fungsi penyimpanan dengan parameter yang baru
+      await _dbService.saveInspection(
+        reportId: _inspectionId, // Simpan ID LD-XXX agar sama dengan yang di Report
+        vehicleName: widget.carModel.isNotEmpty ? widget.carModel : 'Mobil Tidak Dikenal',
+        plateNumber: widget.plateNumber.isNotEmpty ? widget.plateNumber : '-',
+        status: statusUmum,
+        images: widget.images, // Kirim list File asli (Service akan mengurus Base64-nya)
+        findings: detailedFindings, // Kirim detail temuan
+      );
+      
+      _isSaved = true;
+    } catch (e) {
+      debugPrint('Gagal menyimpan ke database: $e');
+    }
+  }
+
+
   String _getFormattedDate() {
     final now = DateTime.now();
     return '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year} ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
@@ -28,55 +83,29 @@ class ReportScreen extends StatelessWidget {
 
   String _generateInspectionID() {
     final now = DateTime.now();
-    // Format: LD-TAHUNBULANHARI-JAMMENITDETIK
     return 'LD-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}';
   }
 
   bool _isHeavyDamage(DetectionResult res) {
     String damageType = _aiService.classNames[res.classIndex];
+    if (damageType == 'Kaca Pecah' || damageType == 'Lampu Pecah' || damageType == 'Ban Kempes') return true; 
+    double area = res.w * res.h;
+    double maxLength = res.w > res.h ? res.w : res.h;
 
-    // 1. Kerusakan Fatal (Selalu Berat berapapun ukurannya)
-    if (damageType == 'Kaca Pecah' || damageType == 'Lampu Pecah' || damageType == 'Ban Kempes') {
-      return true; 
-    }
-
-    // 2. Ambil metrik geometris
-    double area = res.w * res.h; // Luas kotak
-    double maxLength = res.w > res.h ? res.w : res.h; // Sisi terpanjang (lebar atau tinggi)
-
-    // 3. Logika Spesifik per Kelas
-    if (damageType == 'Goresan') {
-      // Jika panjang goresan membentang lebih dari 40% ukuran foto, anggap BERAT
-      if (maxLength > 0.40) return true;
-    } 
-    else if (damageType == 'Retak') {
-      // Retak lebih fatal dari goresan, jika lebih dari 25% panjang foto, anggap BERAT
-      if (maxLength > 0.25) return true;
-    } 
-    else if (damageType == 'Penyok') {
-      // Penyok dilihat dari luas area. Kita naikkan ke 15% untuk toleransi foto close-up
-      if (area > 0.15) return true;
-    }
-
-    // Jika tidak memenuhi syarat "Berat" di atas, berarti Ringan
+    if (damageType == 'Goresan' && maxLength > 0.40) return true;
+    if (damageType == 'Retak' && maxLength > 0.25) return true;
+    if (damageType == 'Penyok' && area > 0.15) return true;
+    
     return false;
   }
   
   String _calculateGeneralStatus(List<DetectionResult> results) {
     if (results.isEmpty) return 'Sangat Baik';
-    
-    // Jika ada minimal 1 kerusakan "Berat", status langsung "Kritis"
-    bool hasHeavyDamage = results.any((res) => _isHeavyDamage(res));
-    if (hasHeavyDamage) return 'Butuh Perbaikan Segera';
-
-    // Jika cuma 1-2 lecet ringan
+    if (results.any((res) => _isHeavyDamage(res))) return 'Butuh Perbaikan Segera';
     if (results.length <= 2) return 'Minor / Perhatian';
-    
-    // Jika lecet ringan tapi banyak
     return 'Perawatan Eksterior';
   }
 
-  // Fungsi tambahan untuk menentukan warna status umum
   Color _getStatusColor(String status) {
     if (status == 'Sangat Baik') return Colors.green;
     if (status == 'Butuh Perbaikan Segera') return Colors.red;
@@ -87,10 +116,9 @@ class ReportScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isSafe = results.isEmpty;
+    final isSafe = widget.results.isEmpty;
     
-    // Hitung status dan warna di sini agar rapi
-    final statusUmum = _calculateGeneralStatus(results);
+    final statusUmum = _calculateGeneralStatus(widget.results);
     final statusColor = _getStatusColor(statusUmum);
 
     return Scaffold(
@@ -102,26 +130,23 @@ class ReportScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          // Info ID & Tanggal
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(_generateInspectionID(), style: TextStyle(color: colorScheme.secondary, fontWeight: FontWeight.bold)),
-              Text(_getFormattedDate(), style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
+              Text(_inspectionId, style: TextStyle(color: colorScheme.secondary, fontWeight: FontWeight.bold)),
+              Text(_formattedDate, style: TextStyle(fontSize: 12, color: colorScheme.onSurfaceVariant)),
             ],
           ),
           const SizedBox(height: 8),
           Text('Hasil Analisis', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
-          if (carModel.isNotEmpty || plateNumber.isNotEmpty)
-            Padding(padding: const EdgeInsets.only(top: 4), child: Text('$carModel • $plateNumber', style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant))),
+          if (widget.carModel.isNotEmpty || widget.plateNumber.isNotEmpty)
+            Padding(padding: const EdgeInsets.only(top: 4), child: Text('${widget.carModel} • ${widget.plateNumber}', style: TextStyle(fontSize: 14, color: colorScheme.onSurfaceVariant))),
           
           const SizedBox(height: 24),
 
-          // Render semua foto yang dianalisis
-          ...List.generate(images.length, (index) {
+          ...List.generate(widget.images.length, (index) {
             int currentPhotoIndex = index + 1;
-            // Ambil HANYA kotak deteksi untuk foto spesifik ini
-            var photoResults = results.where((r) => r.photoIndex == currentPhotoIndex).toList();
+            var photoResults = widget.results.where((r) => r.photoIndex == currentPhotoIndex).toList();
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,7 +162,7 @@ class ReportScreen extends StatelessWidget {
                     decoration: BoxDecoration(border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.5))),
                     child: Stack(
                       children: [
-                        Image.file(images[index], width: double.infinity, fit: BoxFit.fitWidth),
+                        Image.file(widget.images[index], width: double.infinity, fit: BoxFit.fitWidth),
                         Positioned.fill(child: CustomPaint(painter: BoundingBoxPainter(photoResults, _aiService.classNames))),
                       ],
                     ),
@@ -148,7 +173,6 @@ class ReportScreen extends StatelessWidget {
             );
           }),
 
-          // Metrics Grid
           Row(
             children: [
               Expanded(
@@ -160,7 +184,7 @@ class ReportScreen extends StatelessWidget {
                     children: [
                       Text('TOTAL KERUSAKAN', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.secondary)),
                       const SizedBox(height: 8),
-                      Text('${results.length} Titik', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: colorScheme.onSurface))
+                      Text('${widget.results.length} Titik', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: colorScheme.onSurface))
                     ],
                   ),
                 )
@@ -175,7 +199,6 @@ class ReportScreen extends StatelessWidget {
                     children: [
                       Text('STATUS UMUM', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: colorScheme.secondary)),
                       const SizedBox(height: 12),
-                      // Menggunakan text dinamis beserta warnanya
                       Text(statusUmum, style: TextStyle(fontSize: 18, height: 1.1, fontWeight: FontWeight.bold, color: statusColor)),
                     ],
                   ),
@@ -188,11 +211,10 @@ class ReportScreen extends StatelessWidget {
           Text('Detail Temuan AI', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorScheme.onSurface)),
           const SizedBox(height: 16),
           
-          // Daftar Temuan
           if (isSafe)
             const Card(child: ListTile(leading: Icon(Icons.check_circle, color: Colors.green), title: Text('Kondisi eksterior sangat baik.')))
           else
-            ...results.map((res) {
+            ...widget.results.map((res) {
               String damageName = _aiService.classNames[res.classIndex];
               bool isHeavy = _isHeavyDamage(res); 
               
@@ -244,22 +266,18 @@ class ReportScreen extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // Tombol PDF
           ElevatedButton.icon(
             onPressed: () async {
-              // Tampilkan indikator proses
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menyiapkan dokumen PDF...')));
-
-              // Panggil PdfService
               await PdfService.generateAndPrintReport(
-                images: images,
-                results: results,
-                carModel: carModel,
-                plateNumber: plateNumber,
-                carColor: carColor,
+                images: widget.images,
+                results: widget.results,
+                carModel: widget.carModel,
+                plateNumber: widget.plateNumber,
+                carColor: widget.carColor,
                 classNames: _aiService.classNames,
-                inspectionId: _generateInspectionID(),
-                date: _getFormattedDate(),
+                inspectionId: _inspectionId,
+                date: _formattedDate,
               );
             },
             icon: const Icon(Icons.picture_as_pdf),
