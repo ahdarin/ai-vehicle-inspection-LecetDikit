@@ -22,6 +22,14 @@
           }
         },
         {
+          "client_id": "273934132035-g0nh43nqs52lg3tk4o4bl5gakh78l517.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.lecetdikit",
+            "certificate_hash": "edea66b6c39b55574a6206c09331832aaee50ea6"
+          }
+        },
+        {
           "client_id": "273934132035-8kuvdrki16s5op6kht43oi6qghmkpru7.apps.googleusercontent.com",
           "client_type": 3
         }

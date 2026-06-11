@@ -13,11 +13,23 @@ class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  
+  // PERBAIKAN: Menambah Controller untuk Konfirmasi Password
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  
   final _formKey = GlobalKey<FormState>();
 
   bool _isLogin = true; 
   bool _obscurePassword = true;
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
 
   void _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -36,6 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
           setState(() {
             _isLogin = true;
             _passwordController.clear();
+            _confirmPasswordController.clear();
           });
         }
       }
@@ -57,7 +70,12 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleGoogleLogin() async {
     setState(() => _isLoading = true);
     try {
-      await _authService.signInWithGoogle();
+      final userCred = await _authService.signInWithGoogle();
+      if (userCred == null && mounted) {
+         // Jika user membatalkan jendela popup Google
+         setState(() => _isLoading = false);
+         return;
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal login Google. Coba lagi.')));
     } finally {
@@ -78,14 +96,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Membaca skema warna sesuai tema aktif
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
       body: Stack(
         children: [
-          // Background Gradient Dekoratif (Glowing Orb)
           Positioned(
             top: -100, right: -50,
             child: ImageFiltered(
@@ -101,7 +117,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // Konten Form Utama
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -110,7 +125,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Hero Identity
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(color: colorScheme.primaryContainer.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: colorScheme.primaryContainer.withOpacity(0.2))),
@@ -122,7 +136,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text('Sistem inspeksi otomotif berbasis AI dengan\npresisi tinggi untuk kendaraan Anda.', textAlign: TextAlign.center, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14)),
                     const SizedBox(height: 32),
 
-                    // Glass Panel Card
                     ClipRRect(
                       borderRadius: BorderRadius.circular(20),
                       child: BackdropFilter(
@@ -196,6 +209,33 @@ class _LoginScreenState extends State<LoginScreen> {
                                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: colorScheme.primaryContainer)),
                                 ),
                               ),
+                              
+                              // PERBAIKAN: Menambahkan Field Konfirmasi Password Hanya untuk Register
+                              if (!_isLogin) ...[
+                                const SizedBox(height: 20),
+                                Text('Konfirmasi Kata Sandi', style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                TextFormField(
+                                  controller: _confirmPasswordController,
+                                  obscureText: _obscurePassword,
+                                  style: TextStyle(color: colorScheme.onSurface),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) return 'Konfirmasi kata sandi tidak boleh kosong';
+                                    if (value != _passwordController.text) return 'Kata sandi tidak cocok';
+                                    return null;
+                                  },
+                                  decoration: InputDecoration(
+                                    prefixIcon: Icon(Icons.lock_reset, color: colorScheme.onSurfaceVariant),
+                                    hintText: 'Ulangi Kata Sandi',
+                                    hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.5)),
+                                    filled: true,
+                                    fillColor: colorScheme.surface,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5))),
+                                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: colorScheme.primaryContainer)),
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 32),
 
                               SizedBox(
@@ -231,6 +271,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       _formKey.currentState?.reset();
                                       _emailController.clear();
                                       _passwordController.clear();
+                                      _confirmPasswordController.clear(); // Bersihkan field
                                     });
                                   },
                                   child: RichText(

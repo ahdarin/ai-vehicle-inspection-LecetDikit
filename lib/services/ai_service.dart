@@ -2,12 +2,10 @@ import 'dart:math';
 import 'package:tflite_flutter/tflite_flutter.dart';
 import 'package:flutter/services.dart';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:path_provider/path_provider.dart';
 import 'package:image/image.dart' as img;
-import 'package:flutter/foundation.dart'; // Ditambahkan untuk fungsi compute
+import 'package:flutter/foundation.dart';
 
-// Tambahkan photoIndex agar kita tahu ini lecet di foto ke berapa
 class DetectionResult {
   final int classIndex;
   final double confidence;
@@ -51,7 +49,7 @@ Float32List? _isolatePreprocess(Uint8List imageBytes) {
     return null;
   }
 }
-// ----------------------------------------------------------------------
+
 
 class AiService {
   Interpreter? _interpreter;
@@ -74,7 +72,7 @@ class AiService {
       await modelFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
       _interpreter = await Interpreter.fromFile(modelFile);
     } catch (e) {
-      // Print dihapus sesuai instruksi
+      debugPrint("Failed to load model: $e");
     }
   }
 
@@ -116,13 +114,12 @@ class AiService {
     }
     return finalBoxes;
   }
-  // ---------------------------------------------------------
 
   Future<List<DetectionResult>> detectObject(Uint8List imageBytes, {required int photoIndex}) async {
     if (_interpreter == null) return [];
 
     try {
-      // OPTIMASI: Memindahkan proses decode, resize, dan normalisasi pixel ke Isolate
+      // proses decode, resize, dan normalisasi pixel dalam Isolate
       final Float32List? inputList = await compute(_isolatePreprocess, imageBytes);
       if (inputList == null) return [];
 
@@ -142,21 +139,21 @@ class AiService {
             maxClassIndex = c;
           }
         }
-        if (maxConfidence > 0.50) { // Nilai threshold AI
+        if (maxConfidence > 0.50) {
           rawResults.add(DetectionResult(
             classIndex: maxClassIndex,
             confidence: maxConfidence,
             x: output[0][0][i], y: output[0][1][i],
             w: output[0][2][i], h: output[0][3][i],
-            photoIndex: photoIndex, // Simpan nomor foto
+            photoIndex: photoIndex,
           ));
         }
       }
 
-      // Terapkan NMS (Threshold IoU 0.45)
       return _applyNMS(rawResults, 0.45);
 
     } catch (e) {
+      debugPrint("Error during object detection: $e");
       return [];
     }
   }

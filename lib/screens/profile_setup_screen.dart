@@ -73,7 +73,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Silakan masukkan nama Anda untuk personalisasi akun aplikasi AutoVision AI.',
+                  'Silakan masukkan nama Anda untuk personalisasi akun LecetDikit AI.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14),
                 ),

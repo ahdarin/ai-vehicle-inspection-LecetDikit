@@ -23,12 +23,12 @@ class AboutScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 16.0),
               child: Image.asset(
                 'assets/images/logo.png',
-                height: 130, // Mengatur ukuran tinggi logo agar terlihat besar dominan
+                height: 130,
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => Icon(
                   Icons.car_crash,
                   color: colorScheme.primary,
-                  size: 100, // Ikon fallback jika gambar belum ter-load sempurna
+                  size: 100,
                 ),
               ),
             ),

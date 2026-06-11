@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lecetdikit/screens/about_screen.dart';
 import 'package:lecetdikit/services/auth_service.dart';
-import 'package:lecetdikit/main.dart'; // Import main.dart untuk akses themeNotifier
+import 'package:lecetdikit/main.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // Import main.dart untuk akses themeNotifier
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -238,11 +239,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           underline: const SizedBox(),
                           icon: Icon(Icons.arrow_drop_down, color: colorScheme.primary),
                           style: TextStyle(color: colorScheme.primary, fontSize: 14, fontWeight: FontWeight.w500),
-                          onChanged: (ThemeMode? newMode) {
+                          onChanged: (ThemeMode? newMode) async {
                             if (newMode != null) {
-                              setState(() {
-                                themeNotifier.value = newMode;
-                              });
+                              themeNotifier.value = newMode; // Ini otomatis memperbarui UI di seluruh aplikasi
+                              
+                              // PERBAIKAN TEMA: Simpan ke SharedPreferences
+                              final prefs = await SharedPreferences.getInstance();
+                              String themeStr = 'system';
+                              if (newMode == ThemeMode.light) themeStr = 'light';
+                              if (newMode == ThemeMode.dark) themeStr = 'dark';
+                              await prefs.setString('themeMode', themeStr);
                             }
                           },
                           items: const [

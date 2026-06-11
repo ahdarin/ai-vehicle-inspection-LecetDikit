@@ -25,10 +25,15 @@ void main() async {
   final aiService = AiService();
   await aiService.loadModel();
 
+  // PERBAIKAN TEMA: Menggunakan String karena ThemeMode memiliki 3 nilai (system, light, dark)
   final prefs = await SharedPreferences.getInstance();
-  final isDark = prefs.getBool('isDarkMode');
-  if (isDark != null) {
-    themeNotifier.value = isDark ? ThemeMode.dark : ThemeMode.light;
+  final themeStr = prefs.getString('themeMode');
+  if (themeStr == 'dark') {
+    themeNotifier.value = ThemeMode.dark;
+  } else if (themeStr == 'light') {
+    themeNotifier.value = ThemeMode.light;
+  } else {
+    themeNotifier.value = ThemeMode.system;
   }
 
   runApp(const MyApp());
@@ -77,28 +82,53 @@ class MyApp extends StatelessWidget {
             fontFamily: 'Inter',
           ),
           
-          home: StreamBuilder<User?>(
-            stream: FirebaseAuth.instance.authStateChanges(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Scaffold(
-                  backgroundColor: Theme.of(context).colorScheme.surface,
-                  body: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primaryContainer)),
-                );
-              }
-              if (snapshot.hasData) {
-                final user = snapshot.data;
-
-                if (user != null && !user.isAnonymous && (user.displayName == null || user.displayName!.isEmpty)) {
-                  return const ProfileSetupScreen();
-                }
-                return const DashboardScreen();
-              }
-              return const LoginScreen();
-            },
-          ), 
+          // PERBAIKAN NAVIGASI: Menggunakan AuthWrapper agar StreamBuilder tidak reset saat ganti tema
+          home: const AuthWrapper(), 
         );
       }
+    );
+  }
+}
+
+// Tambahan StatefulWidget untuk caching stream Firebase
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  late final Stream<User?> _authStream;
+
+  @override
+  void initState() {
+    super.initState();
+    // Inisialisasi stream hanya sekali, mencegah reset saat tema berubah
+    _authStream = FirebaseAuth.instance.authStateChanges();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: _authStream,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            body: Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primaryContainer)),
+          );
+        }
+        if (snapshot.hasData) {
+          final user = snapshot.data;
+
+          if (user != null && !user.isAnonymous && (user.displayName == null || user.displayName!.isEmpty)) {
+            return const ProfileSetupScreen();
+          }
+          return const DashboardScreen();
+        }
+        return const LoginScreen();
+      },
     );
   }
 }

@@ -1,15 +1,18 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  // Google Sign In v7
+  // Pada v7, GoogleSignIn wajib menggunakan singleton (GoogleSignIn.instance)
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
-  // Inisialisasi Google Sign In
+  // Inisialisasi Google Sign-In (Langkah wajib di v7 sebelum memanggil metode lain)
   Future<void> init() async {
-    await _googleSignIn.initialize();
+    await _googleSignIn.initialize(
+      serverClientId: '273934132035-8kuvdrki16s5op6kht43oi6qghmkpru7.apps.googleusercontent.com',
+    );
   }
 
   // User saat ini
@@ -48,25 +51,24 @@ class AuthService {
     }
   }
 
-  // Login Google
+  // Login Google (Sesuai dokumentasi v7.2.0)
   Future<UserCredential?> signInWithGoogle() async {
     try {
-      // Munculkan popup pilih akun Google
-      final GoogleSignInAccount googleUser =
-          await _googleSignIn.authenticate();
+      // 1. Menggunakan authenticate() untuk memanggil popup pemilihan akun
+      final GoogleSignInAccount googleUser = await _googleSignIn.authenticate();
 
-      // Ambil token
-      final GoogleSignInAuthentication googleAuth =
-          googleUser.authentication;
+      // 2. Mengambil detail otentikasi (Di v7, ini bersifat synchronous, TANPA await)
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
 
-      // Buat credential Firebase
+      // 3. Membungkus token ke dalam kredensial Firebase
       final AuthCredential credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
       );
 
-      // Login ke Firebase
+      // 4. Meneruskan kredensial ke Firebase
       return await _auth.signInWithCredential(credential);
     } catch (e) {
+      debugPrint("Error Google Sign-In: $e");
       rethrow;
     }
   }
